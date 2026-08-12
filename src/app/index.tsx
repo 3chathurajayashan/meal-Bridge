@@ -1,98 +1,162 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  StatusBar,
+  Animated,
+  Easing,
+} from 'react-native';
+import { useRouter } from 'expo-router';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+export default function Index() {
+  const router = useRouter();
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
+  // Animation values
+  const nameTranslateY = useRef(new Animated.Value(16)).current;
+  const nameOpacity = useRef(new Animated.Value(0)).current;
+
+  const taglineTranslateY = useRef(new Animated.Value(12)).current;
+  const taglineOpacity = useRef(new Animated.Value(0)).current;
+
+  const containerOpacity = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const sequence = Animated.sequence([
+      // 1. Brand name reveal
+      Animated.parallel([
+        Animated.timing(nameOpacity, {
+          toValue: 1,
+          duration: 600,
+          easing: Easing.bezier(0.16, 1, 0.3, 1),
+          useNativeDriver: true,
+        }),
+
+        Animated.timing(nameTranslateY, {
+          toValue: 0,
+          duration: 600,
+          easing: Easing.bezier(0.16, 1, 0.3, 1),
+          useNativeDriver: true,
+        }),
+      ]),
+
+      // 2. Tagline reveal
+      Animated.parallel([
+        Animated.timing(taglineOpacity, {
+          toValue: 1,
+          duration: 500,
+          easing: Easing.bezier(0.16, 1, 0.3, 1),
+          useNativeDriver: true,
+        }),
+
+        Animated.timing(taglineTranslateY, {
+          toValue: 0,
+          duration: 500,
+          easing: Easing.bezier(0.16, 1, 0.3, 1),
+          useNativeDriver: true,
+        }),
+      ]),
+
+      // 3. Subtle dwell time
+      Animated.delay(700),
+
+      // 4. Smooth iOS-style fade out
+      Animated.timing(containerOpacity, {
+        toValue: 0,
+        duration: 400,
+        easing: Easing.bezier(0.32, 0, 0.67, 0),
+        useNativeDriver: true,
+      }),
+    ]);
+
+    sequence.start(({ finished }) => {
+      if (finished) {
+        router.replace('/onboarding');
+      }
+    });
+
+    return () => {
+      sequence.stop();
+    };
+  }, [router]);
+
   return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+    <Animated.View
+      style={[
+        styles.container,
+        {
+          opacity: containerOpacity,
+        },
+      ]}
+    >
+      <StatusBar barStyle="light-content" />
 
-export default function HomeScreen() {
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcomse to Meal Bridge
-          </ThemedText>
-        </ThemedView>
+      {/* Brand text centered */}
+      <View style={styles.textContainer}>
+        <Animated.Text
+          style={[
+            styles.brandName,
+            {
+              opacity: nameOpacity,
+              transform: [
+                {
+                  translateY: nameTranslateY,
+                },
+              ],
+            },
+          ]}
+        >
+          Meal Bridge
+        </Animated.Text>
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
-
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+        <Animated.Text
+          style={[
+            styles.tagline,
+            {
+              opacity: taglineOpacity,
+              transform: [
+                {
+                  translateY: taglineTranslateY,
+                },
+              ],
+            },
+          ]}
+        >
+          Fresh Food, Delivered.
+        </Animated.Text>
+      </View>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#FF6B00',
     justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
     alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
   },
-  heroSection: {
+
+  textContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+    paddingHorizontal: 32,
   },
-  title: {
+
+  brandName: {
+    fontSize: 40,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.4,
+    marginBottom: 12,
     textAlign: 'center',
   },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+
+  tagline: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.85)',
+    letterSpacing: 0.2,
+    fontWeight: '400',
+    textAlign: 'center',
   },
 });
