@@ -2,665 +2,297 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
     View,
     Text,
-    ScrollView,
-    TouchableOpacity,
-    Image,
     StyleSheet,
     SafeAreaView,
+    FlatList,
     RefreshControl,
+    TouchableOpacity,
+    Image,
+    ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../context/AuthContext";
 import { volunteerApi } from "../../services/api";
-import type { VolunteerSummary, Delivery } from "../../types/volunteer";
-import LoadingState from "../../components/volunteer/LoadingState";
+import type { Delivery } from "../../types/volunteer";
 
-// ─────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────
+// ─── Mini delivery card ──────────────────────────────────────
+const DeliveryCard: React.FC<{
+    delivery: Delivery;
+    onPress: (id: string) => void;
+}> = ({ delivery, onPress }) => {
+    const { donation, pickupAddress, dropOffAddress } = delivery;
+    const pickup  = pickupAddress.fullAddress  ?? pickupAddress.street  ?? "—";
+    const dropoff = dropOffAddress.fullAddress ?? dropOffAddress.street ?? "—";
 
-function formatRating(r?: number): string {
-    if (r == null) return "—";
-    return r.toFixed(1);
-}
-
-function shortAddress(d: Delivery): string {
     return (
-        d.dropOffAddress.fullAddress ??
-        [d.dropOffAddress.street, d.dropOffAddress.city]
-            .filter(Boolean)
-            .join(", ") ??
-        "—"
+        <View style={cardS.card}>
+            {/* Top row */}
+            <View style={cardS.topRow}>
+                {donation.imageUrl ? (
+                    <Image source={{ uri: donation.imageUrl }} style={cardS.image} resizeMode="cover" />
+                ) : (
+                    <View style={cardS.imagePlaceholder}>
+                        <Ionicons name="fast-food-outline" size={36} color="#8E8E93" />
+                    </View>
+                )}
+                <View style={cardS.foodInfo}>
+                    <Text style={cardS.foodName} numberOfLines={2}>{donation.foodName}</Text>
+                    <Text style={cardS.qty}>{donation.quantity}</Text>
+                    {donation.category ? (
+                        <View style={cardS.categoryBadge}>
+                            <Text style={cardS.categoryText}>{donation.category}</Text>
+                        </View>
+                    ) : null}
+                </View>
+            </View>
+
+            <View style={cardS.divider} />
+
+            {/* Route */}
+            <View style={cardS.routeBlock}>
+                <View style={cardS.routeRow}>
+                    <View style={[cardS.dot, { backgroundColor: "#FF6B00" }]} />
+                    <View style={cardS.routeText}>
+                        <Text style={cardS.routeLabel}>Pickup</Text>
+                        <Text style={cardS.routeAddr} numberOfLines={1}>{pickup}</Text>
+                    </View>
+                </View>
+                <View style={cardS.routeConnector} />
+                <View style={cardS.routeRow}>
+                    <View style={[cardS.dot, { backgroundColor: "#34C759" }]} />
+                    <View style={cardS.routeText}>
+                        <Text style={cardS.routeLabel}>Drop-off</Text>
+                        <Text style={cardS.routeAddr} numberOfLines={1}>{dropoff}</Text>
+                    </View>
+                </View>
+            </View>
+
+            <View style={cardS.divider} />
+
+            {/* Meta chips */}
+            <View style={cardS.metaRow}>
+                {delivery.distanceKm != null && (
+                    <View style={cardS.chip}>
+                        <Ionicons name="location-outline" size={13} color="#3C3C43" style={cardS.chipIcon} />
+                        <Text style={cardS.chipText}>
+                            {delivery.distanceKm < 1
+                                ? `${Math.round(delivery.distanceKm * 1000)} m`
+                                : `${delivery.distanceKm.toFixed(1)} km`}
+                        </Text>
+                    </View>
+                )}
+                {(delivery.availableFrom || delivery.availableUntil) ? (
+                    <View style={cardS.chip}>
+                        <Ionicons name="time-outline" size={13} color="#3C3C43" style={cardS.chipIcon} />
+                        <Text style={cardS.chipText}>
+                            {delivery.availableFrom
+                                ? new Date(delivery.availableFrom).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                                : ""}
+                            {delivery.availableFrom && delivery.availableUntil ? " – " : ""}
+                            {delivery.availableUntil
+                                ? new Date(delivery.availableUntil).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                                : ""}
+                        </Text>
+                    </View>
+                ) : null}
+            </View>
+
+            {/* CTA */}
+            <TouchableOpacity style={cardS.cta} onPress={() => onPress(delivery.id)} activeOpacity={0.8}>
+                <Text style={cardS.ctaText}>View Details</Text>
+                <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
+            </TouchableOpacity>
+        </View>
     );
-}
+};
 
-function statusColor(status: string): string {
-    switch (status) {
-        case "ACCEPTED":   return "#007AFF";
-        case "PICKED_UP":  return "#5856D6";
-        case "IN_TRANSIT": return "#FF9500";
-        default:           return "#34C759";
-    }
-}
+const cardS = StyleSheet.create({
+    card: {
+        backgroundColor: "#FFFFFF", borderRadius: 18, padding: 16, marginBottom: 14,
+        shadowColor: "#000", shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.07, shadowRadius: 12, elevation: 3,
+    },
+    topRow: { flexDirection: "row", marginBottom: 14 },
+    image: { width: 80, height: 80, borderRadius: 12, marginRight: 14, backgroundColor: "#F2F2F7" },
+    imagePlaceholder: {
+        width: 80, height: 80, borderRadius: 12, backgroundColor: "#F2F2F7",
+        marginRight: 14, alignItems: "center", justifyContent: "center",
+    },
+    foodInfo: { flex: 1, justifyContent: "center" },
+    foodName: { fontSize: 17, fontWeight: "700", color: "#1C1C1E", letterSpacing: -0.4, marginBottom: 4 },
+    qty: { fontSize: 14, color: "#8E8E93", fontWeight: "500", marginBottom: 6 },
+    categoryBadge: {
+        alignSelf: "flex-start", backgroundColor: "#FFF3E8", borderRadius: 8,
+        paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: "#FFD5A8",
+    },
+    categoryText: { fontSize: 11, fontWeight: "600", color: "#FF6B00" },
+    divider: { height: StyleSheet.hairlineWidth, backgroundColor: "#E5E5EA", marginBottom: 14 },
+    routeBlock: { marginBottom: 14, paddingHorizontal: 4 },
+    routeRow: { flexDirection: "row", alignItems: "flex-start" },
+    dot: { width: 10, height: 10, borderRadius: 5, marginTop: 3, marginRight: 10 },
+    routeConnector: { width: 1.5, height: 12, marginLeft: 4, backgroundColor: "#C7C7CC", marginVertical: 3 },
+    routeText: { flex: 1 },
+    routeLabel: { fontSize: 11, fontWeight: "600", color: "#8E8E93", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 1 },
+    routeAddr: { fontSize: 14, fontWeight: "500", color: "#1C1C1E" },
+    metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
+    chip: { flexDirection: "row", alignItems: "center", backgroundColor: "#F2F2F7", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
+    chipIcon: { marginRight: 4 },
+    chipText: { fontSize: 12, fontWeight: "500", color: "#3C3C43" },
+    cta: {
+        height: 48, borderRadius: 14, backgroundColor: "#FF6B00",
+        alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6,
+        shadowColor: "#FF6B00", shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.22, shadowRadius: 8, elevation: 4,
+    },
+    ctaText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
+});
 
-function statusLabel(status: string): string {
-    switch (status) {
-        case "ACCEPTED":   return "Accepted";
-        case "PICKED_UP":  return "Picked Up";
-        case "IN_TRANSIT": return "In Transit";
-        default:           return status;
-    }
-}
+// ─── Main dashboard ──────────────────────────────────────────
+export default function VolunteerDashboard() {
+    const router              = useRouter();
+    const { user, accessToken } = useAuth();
 
-// ─────────────────────────────────────────────────────────────
-// Stat card
-// ─────────────────────────────────────────────────────────────
-
-const StatCard: React.FC<{
-    value: string | number;
-    label: string;
-    accent?: boolean;
-}> = ({ value, label, accent = false }) => (
-    <View style={styles.statCard}>
-        <Text style={[styles.statValue, accent && styles.statValueAccent]}>
-            {value}
-        </Text>
-        <Text style={styles.statLabel}>{label}</Text>
-    </View>
-);
-
-// ─────────────────────────────────────────────────────────────
-// Main component
-// ─────────────────────────────────────────────────────────────
-
-const VolunteerDashboard: React.FC = () => {
-    const router          = useRouter();
-    const { user, logout, accessToken } = useAuth();
-
-    const [summary, setSummary]       = useState<VolunteerSummary | null>(null);
+    const [deliveries, setDeliveries] = useState<Delivery[]>([]);
     const [loading, setLoading]       = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError]           = useState<string | null>(null);
 
-    // ── Fetch summary ──────────────────────────────────────────
-
-    const fetchSummary = useCallback(async () => {
+    const fetchDeliveries = useCallback(async () => {
         if (!accessToken) return;
         try {
             setError(null);
-            const data = await volunteerApi.getSummary(accessToken) as VolunteerSummary;
-            setSummary(data);
+            const list = await volunteerApi.getAvailableDeliveries(accessToken);
+            setDeliveries(list);
         } catch (e) {
-            setError(e instanceof Error ? e.message : "Failed to load summary.");
+            setError(e instanceof Error ? e.message : "Failed to load deliveries.");
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
     }, [accessToken]);
 
-    useEffect(() => {
-        fetchSummary();
-    }, [fetchSummary]);
-
-    const handleRefresh = () => {
-        setRefreshing(true);
-        fetchSummary();
-    };
-
-    // ── Logout ────────────────────────────────────────────────
-
-    const handleLogout = async () => {
-        await logout();
-        router.replace("/auth/signIn");
-    };
-
-    // ── Profile initial ───────────────────────────────────────
+    useEffect(() => { fetchDeliveries(); }, [fetchDeliveries]);
 
     const initial = user?.fullName?.charAt(0)?.toUpperCase() ?? "V";
 
-    // ─────────────────────────────────────────────────────────
-    // Render
-    // ─────────────────────────────────────────────────────────
-
-    if (loading) {
-        return (
-            <SafeAreaView style={styles.safeArea}>
-                <LoadingState message="Loading dashboard…" />
-            </SafeAreaView>
-        );
-    }
-
     return (
-        <SafeAreaView style={styles.safeArea}>
-            <ScrollView
-                contentContainerStyle={styles.content}
-                showsVerticalScrollIndicator={false}
-                refreshControl={
-                    <RefreshControl
-                        refreshing={refreshing}
-                        onRefresh={handleRefresh}
-                        tintColor="#FF6B00"
-                    />
-                }
-            >
-                {/* ── Header ──────────────────────────────────── */}
-                <View style={styles.header}>
-                    <View style={styles.headerText}>
-                        <Text style={styles.welcome}>Welcome back</Text>
-                        <Text style={styles.title}>Dashboard</Text>
+        <SafeAreaView style={s.safeArea}>
+            {/* Header */}
+            <View style={s.header}>
+                <View>
+                    <Text style={s.welcome}>Welcome back</Text>
+                    <Text style={s.title}>Dashboard</Text>
+                </View>
+                <View style={s.headerRight}>
+                    <TouchableOpacity
+                        style={s.refreshBtn}
+                        onPress={() => { setRefreshing(true); fetchDeliveries(); }}
+                        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    >
+                        <Ionicons name="refresh-outline" size={20} color="#FF6B00" />
+                    </TouchableOpacity>
+                    <View style={s.avatar}>
+                        <Text style={s.avatarText}>{initial}</Text>
                     </View>
-
-                    <TouchableOpacity
-                        style={styles.profileContainer}
-                        activeOpacity={0.85}
-                    >
-                        {user?.profileImage?.url ? (
-                            <Image
-                                source={{ uri: user.profileImage.url }}
-                                style={styles.profileImage}
-                            />
-                        ) : (
-                            <View style={styles.profilePlaceholder}>
-                                <Text style={styles.profileInitial}>{initial}</Text>
-                            </View>
-                        )}
-                    </TouchableOpacity>
                 </View>
+            </View>
 
-                {/* ── Error banner ─────────────────────────────── */}
-                {error ? (
-                    <View style={styles.errorBanner}>
-                        <Text style={styles.errorText}>{error}</Text>
-                        <TouchableOpacity onPress={fetchSummary}>
-                            <Text style={styles.retryText}>Retry</Text>
-                        </TouchableOpacity>
-                    </View>
-                ) : null}
-
-                {/* ── Stats grid ───────────────────────────────── */}
-                <Text style={styles.sectionHeader}>Overview</Text>
-
-                <View style={styles.statsGrid}>
-                    <StatCard
-                        value={summary?.availableDeliveries ?? 0}
-                        label="Available"
-                        accent
-                    />
-                    <StatCard
-                        value={summary?.completedDeliveries ?? 0}
-                        label="Completed"
-                    />
-                    <StatCard
-                        value={summary?.totalDeliveries ?? 0}
-                        label="Total"
-                    />
-                    <StatCard
-                        value={
-                            summary?.averageRating != null
-                                ? `★ ${formatRating(summary.averageRating)}`
-                                : "—"
-                        }
-                        label="Avg. Rating"
-                    />
+            {loading ? (
+                <View style={s.center}>
+                    <ActivityIndicator size="large" color="#FF6B00" />
+                    <Text style={s.loadingText}>Finding deliveries…</Text>
                 </View>
-
-                {/* ── Active delivery ──────────────────────────── */}
-                {summary?.activeDelivery ? (
-                    <>
-                        <Text style={styles.sectionHeader}>Active Delivery</Text>
-                        <TouchableOpacity
-                            style={styles.activeCard}
-                            onPress={() =>
-                                router.push(
-                                    `/volunteer/deliveries/${summary.activeDelivery!.id}`
-                                )
-                            }
-                            activeOpacity={0.8}
-                        >
-                            {/* Food image */}
-                            {summary.activeDelivery.donation.imageUrl ? (
-                                <Image
-                                    source={{ uri: summary.activeDelivery.donation.imageUrl }}
-                                    style={styles.activeImage}
-                                    resizeMode="cover"
-                                />
-                            ) : (
-                                <View style={[styles.activeImage, styles.activeImagePlaceholder]}>
-                                    <Text style={styles.activeImagePlaceholderText}>🍱</Text>
+            ) : (
+                <FlatList
+                    data={deliveries}
+                    keyExtractor={(item) => item.id}
+                    renderItem={({ item }) => (
+                        <DeliveryCard delivery={item} onPress={(id) => router.push(`/volunteer/deliveries/${id}`)} />
+                    )}
+                    contentContainerStyle={s.listContent}
+                    showsVerticalScrollIndicator={false}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={() => { setRefreshing(true); fetchDeliveries(); }}
+                            tintColor="#FF6B00"
+                        />
+                    }
+                    ListHeaderComponent={
+                        <>
+                            {error ? (
+                                <View style={s.errorBanner}>
+                                    <Text style={s.errorText}>{error}</Text>
+                                    <TouchableOpacity onPress={fetchDeliveries}>
+                                        <Text style={s.retryText}>Retry</Text>
+                                    </TouchableOpacity>
                                 </View>
-                            )}
-
-                            <View style={styles.activeInfo}>
-                                <View style={styles.activeTopRow}>
-                                    <Text style={styles.activeFoodName} numberOfLines={1}>
-                                        {summary.activeDelivery.donation.foodName}
-                                    </Text>
-                                    <View
-                                        style={[
-                                            styles.activeBadge,
-                                            {
-                                                backgroundColor:
-                                                    statusColor(summary.activeDelivery.status) + "20",
-                                            },
-                                        ]}
-                                    >
-                                        <Text
-                                            style={[
-                                                styles.activeBadgeText,
-                                                { color: statusColor(summary.activeDelivery.status) },
-                                            ]}
-                                        >
-                                            {statusLabel(summary.activeDelivery.status)}
-                                        </Text>
-                                    </View>
-                                </View>
-
-                                <Text style={styles.activeAddress} numberOfLines={1}>
-                                    → {shortAddress(summary.activeDelivery)}
+                            ) : null}
+                            {deliveries.length > 0 ? (
+                                <Text style={s.countLabel}>
+                                    {deliveries.length} deliver{deliveries.length !== 1 ? "ies" : "y"} available
                                 </Text>
-
-                                <Text style={styles.activeCta}>Tap to view details →</Text>
+                            ) : null}
+                        </>
+                    }
+                    ListEmptyComponent={
+                        !error ? (
+                            <View style={s.emptyContainer}>
+                                <Ionicons name="mail-open-outline" size={56} color="#C7C7CC" style={s.emptyIconView} />
+                                <Text style={s.emptyTitle}>No deliveries available</Text>
+                                <Text style={s.emptySubtitle}>Check back soon — new donations are listed regularly.</Text>
+                                <TouchableOpacity
+                                    style={s.emptyBtn}
+                                    onPress={() => { setRefreshing(true); fetchDeliveries(); }}
+                                    activeOpacity={0.8}
+                                >
+                                    <Ionicons name="refresh" size={16} color="#FFFFFF" />
+                                    <Text style={s.emptyBtnText}>Refresh</Text>
+                                </TouchableOpacity>
                             </View>
-                        </TouchableOpacity>
-                    </>
-                ) : null}
-
-                {/* ── Quick nav ────────────────────────────────── */}
-                <Text style={styles.sectionHeader}>Actions</Text>
-
-                <View style={styles.navRow}>
-                    <TouchableOpacity
-                        style={[styles.navCard, styles.navCardPrimary]}
-                        onPress={() => router.push("/volunteer/deliveries")}
-                        activeOpacity={0.8}
-                    >
-                        <Text style={styles.navIcon}>🚚</Text>
-                        <Text style={styles.navLabel}>Available{"\n"}Deliveries</Text>
-                        {summary?.availableDeliveries ? (
-                            <View style={styles.navBadge}>
-                                <Text style={styles.navBadgeText}>
-                                    {summary.availableDeliveries}
-                                </Text>
-                            </View>
-                        ) : null}
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={styles.navCard}
-                        onPress={() => router.push("/volunteer/activity")}
-                        activeOpacity={0.8}
-                    >
-                        <Text style={styles.navIcon}>📋</Text>
-                        <Text style={styles.navLabel}>Previous{"\n"}Activity</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* ── Account info ──────────────────────────────── */}
-                <Text style={styles.sectionHeader}>Account</Text>
-
-                <View style={styles.accountCard}>
-                    {[
-                        { label: "Name",   value: user?.fullName    ?? "—" },
-                        { label: "Email",  value: user?.email       ?? "—" },
-                        { label: "Phone",  value: user?.phoneNumber ?? "—" },
-                        { label: "Role",   value: user?.role        ?? "—" },
-                        {
-                            label: "Status",
-                            value: user?.isActive ? "Active" : "Inactive",
-                            isStatus: true,
-                            active: user?.isActive,
-                        },
-                    ].map((row, i, arr) => (
-                        <View
-                            key={row.label}
-                            style={[
-                                styles.accountRow,
-                                i < arr.length - 1 && styles.accountRowBorder,
-                            ]}
-                        >
-                            <Text style={styles.accountLabel}>{row.label}</Text>
-                            <Text
-                                style={[
-                                    styles.accountValue,
-                                    (row as any).isStatus &&
-                                        ((row as any).active
-                                            ? styles.activeStatus
-                                            : styles.inactiveStatus),
-                                ]}
-                                numberOfLines={1}
-                            >
-                                {row.value}
-                            </Text>
-                        </View>
-                    ))}
-                </View>
-
-                {/* ── Logout ───────────────────────────────────── */}
-                <TouchableOpacity
-                    style={styles.logoutBtn}
-                    onPress={handleLogout}
-                    activeOpacity={0.75}
-                >
-                    <Text style={styles.logoutText}>Log Out</Text>
-                </TouchableOpacity>
-            </ScrollView>
+                        ) : null
+                    }
+                />
+            )}
         </SafeAreaView>
     );
-};
+}
 
-export default VolunteerDashboard;
-
-// ─────────────────────────────────────────────────────────────
-// Styles
-// ─────────────────────────────────────────────────────────────
-
-const styles = StyleSheet.create({
-    safeArea: {
-        flex: 1,
-        backgroundColor: "#F2F2F7",
-    },
-    content: {
-        paddingHorizontal: 16,
-        paddingTop: 12,
-        paddingBottom: 40,
-    },
-
-    // ── Header ──────────────────────────────────────────────
+const s = StyleSheet.create({
+    safeArea: { flex: 1, backgroundColor: "#F2F2F7" },
     header: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        marginBottom: 20,
-        paddingHorizontal: 4,
+        flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+        paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16, backgroundColor: "#F2F2F7",
     },
-    headerText: {
-        flex: 1,
-        paddingRight: 12,
+    welcome: { fontSize: 12, fontWeight: "600", color: "#8E8E93", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 2 },
+    title: { fontSize: 32, fontWeight: "700", color: "#FF6B00", letterSpacing: -0.8 },
+    headerRight: { flexDirection: "row", alignItems: "center", gap: 12 },
+    refreshBtn: {
+        width: 36, height: 36, borderRadius: 18, backgroundColor: "#FFFFFF",
+        borderWidth: 1, borderColor: "#E5E5EA", alignItems: "center", justifyContent: "center",
     },
-    welcome: {
-        fontSize: 12,
-        fontWeight: "600",
-        color: "#8E8E93",
-        textTransform: "uppercase",
-        letterSpacing: 0.6,
-        marginBottom: 2,
-    },
-    title: {
-        fontSize: 32,
-        fontWeight: "700",
-        color: "#FF6B00",
-        letterSpacing: -0.8,
-    },
-    profileContainer: {
-        width: 48,
-        height: 48,
-    },
-    profileImage: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        backgroundColor: "#E5E5EA",
-    },
-    profilePlaceholder: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        backgroundColor: "#FF6B00",
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    profileInitial: {
-        color: "#FFFFFF",
-        fontSize: 20,
-        fontWeight: "700",
-    },
-
-    // ── Error banner ─────────────────────────────────────────
+    avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#FF6B00", alignItems: "center", justifyContent: "center" },
+    avatarText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
+    center: { flex: 1, alignItems: "center", justifyContent: "center" },
+    loadingText: { color: "#8E8E93", fontSize: 14, marginTop: 12 },
+    listContent: { paddingHorizontal: 16, paddingBottom: 32, flexGrow: 1 },
+    countLabel: { fontSize: 13, fontWeight: "600", color: "#8E8E93", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 12, paddingHorizontal: 4 },
     errorBanner: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        backgroundColor: "#FFF0EF",
-        borderRadius: 10,
-        paddingHorizontal: 14,
-        paddingVertical: 10,
-        marginBottom: 16,
-        borderWidth: 1,
-        borderColor: "#FF3B3030",
+        flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+        backgroundColor: "#FFF0EF", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10,
+        marginBottom: 12, borderWidth: 1, borderColor: "rgba(255,59,48,0.2)",
     },
-    errorText: {
-        flex: 1,
-        fontSize: 13,
-        color: "#FF3B30",
-        fontWeight: "500",
+    errorText: { flex: 1, fontSize: 13, color: "#FF3B30", fontWeight: "500" },
+    retryText: { fontSize: 13, color: "#FF6B00", fontWeight: "600", marginLeft: 10 },
+    emptyContainer: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 80, paddingHorizontal: 32 },
+    emptyIconView: { marginBottom: 16 },
+    emptyTitle: { fontSize: 19, fontWeight: "700", color: "#1C1C1E", marginBottom: 8, letterSpacing: -0.4 },
+    emptySubtitle: { fontSize: 15, color: "#8E8E93", textAlign: "center", lineHeight: 22, marginBottom: 24 },
+    emptyBtn: {
+        height: 48, paddingHorizontal: 28, borderRadius: 14, backgroundColor: "#FF6B00",
+        alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6,
+        shadowColor: "#FF6B00", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.22, shadowRadius: 8, elevation: 4,
     },
-    retryText: {
-        fontSize: 13,
-        color: "#FF6B00",
-        fontWeight: "600",
-        marginLeft: 10,
-    },
-
-    // ── Section header ───────────────────────────────────────
-    sectionHeader: {
-        fontSize: 13,
-        fontWeight: "600",
-        color: "#8E8E93",
-        textTransform: "uppercase",
-        letterSpacing: 0.5,
-        marginBottom: 8,
-        paddingHorizontal: 4,
-    },
-
-    // ── Stats grid ───────────────────────────────────────────
-    statsGrid: {
-        flexDirection: "row",
-        flexWrap: "wrap",
-        justifyContent: "space-between",
-        marginBottom: 20,
-    },
-    statCard: {
-        width: "48%",
-        backgroundColor: "#FFFFFF",
-        borderRadius: 12,
-        padding: 16,
-        marginBottom: 12,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 8,
-        elevation: 2,
-    },
-    statValue: {
-        fontSize: 26,
-        fontWeight: "700",
-        color: "#1C1C1E",
-        letterSpacing: -0.5,
-    },
-    statValueAccent: {
-        color: "#FF6B00",
-    },
-    statLabel: {
-        fontSize: 13,
-        fontWeight: "500",
-        color: "#8E8E93",
-        marginTop: 2,
-    },
-
-    // ── Active delivery card ──────────────────────────────────
-    activeCard: {
-        flexDirection: "row",
-        backgroundColor: "#FFFFFF",
-        borderRadius: 14,
-        padding: 14,
-        marginBottom: 20,
-        borderWidth: 1.5,
-        borderColor: "#FF6B00",
-        shadowColor: "#FF6B00",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-        elevation: 3,
-    },
-    activeImage: {
-        width: 64,
-        height: 64,
-        borderRadius: 10,
-        backgroundColor: "#F2F2F7",
-        marginRight: 12,
-    },
-    activeImagePlaceholder: {
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    activeImagePlaceholderText: {
-        fontSize: 26,
-    },
-    activeInfo: {
-        flex: 1,
-        justifyContent: "center",
-    },
-    activeTopRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        marginBottom: 4,
-    },
-    activeFoodName: {
-        flex: 1,
-        fontSize: 15,
-        fontWeight: "700",
-        color: "#1C1C1E",
-        letterSpacing: -0.3,
-        marginRight: 8,
-    },
-    activeBadge: {
-        borderRadius: 8,
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-    },
-    activeBadgeText: {
-        fontSize: 11,
-        fontWeight: "700",
-    },
-    activeAddress: {
-        fontSize: 13,
-        color: "#8E8E93",
-        marginBottom: 6,
-    },
-    activeCta: {
-        fontSize: 12,
-        color: "#FF6B00",
-        fontWeight: "600",
-    },
-
-    // ── Nav cards ────────────────────────────────────────────
-    navRow: {
-        flexDirection: "row",
-        gap: 12,
-        marginBottom: 20,
-    },
-    navCard: {
-        flex: 1,
-        backgroundColor: "#FFFFFF",
-        borderRadius: 14,
-        padding: 18,
-        alignItems: "flex-start",
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 2,
-        position: "relative",
-    },
-    navCardPrimary: {
-        backgroundColor: "#FF6B00",
-        shadowColor: "#FF6B00",
-        shadowOpacity: 0.25,
-    },
-    navIcon: {
-        fontSize: 26,
-        marginBottom: 10,
-    },
-    navLabel: {
-        fontSize: 14,
-        fontWeight: "700",
-        color: "#1C1C1E",
-        lineHeight: 19,
-        letterSpacing: -0.2,
-    },
-    navBadge: {
-        position: "absolute",
-        top: 12,
-        right: 12,
-        minWidth: 22,
-        height: 22,
-        borderRadius: 11,
-        backgroundColor: "#FFFFFF",
-        alignItems: "center",
-        justifyContent: "center",
-        paddingHorizontal: 5,
-    },
-    navBadgeText: {
-        fontSize: 12,
-        fontWeight: "700",
-        color: "#FF6B00",
-    },
-
-    // ── Account card ──────────────────────────────────────────
-    accountCard: {
-        backgroundColor: "#FFFFFF",
-        borderRadius: 12,
-        paddingHorizontal: 16,
-        marginBottom: 20,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 8,
-        elevation: 2,
-    },
-    accountRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        paddingVertical: 13,
-    },
-    accountRowBorder: {
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: "#C6C6C8",
-    },
-    accountLabel: {
-        fontSize: 15,
-        color: "#1C1C1E",
-        fontWeight: "400",
-    },
-    accountValue: {
-        fontSize: 15,
-        color: "#8E8E93",
-        fontWeight: "400",
-        maxWidth: "55%",
-        textAlign: "right",
-    },
-    activeStatus: {
-        color: "#34C759",
-        fontWeight: "500",
-    },
-    inactiveStatus: {
-        color: "#FF3B30",
-        fontWeight: "500",
-    },
-
-    // ── Logout ────────────────────────────────────────────────
-    logoutBtn: {
-        height: 50,
-        borderRadius: 12,
-        backgroundColor: "#FF3B30",
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    logoutText: {
-        color: "#FFFFFF",
-        fontSize: 16,
-        fontWeight: "600",
-    },
+    emptyBtnText: { color: "#FFFFFF", fontSize: 16, fontWeight: "600" },
 });
