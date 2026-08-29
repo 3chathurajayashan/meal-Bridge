@@ -1,15 +1,8 @@
 import React, { useEffect, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  StatusBar,
-  Animated,
-  Easing,
-} from 'react-native';
+import { View, Text, StyleSheet, Animated, Easing, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
 
-export default function Index() {
+export default function SplashScreen() {
   const router = useRouter();
 
   // Animation values

@@ -7,6 +7,7 @@ import {
     SafeAreaView,
     Dimensions,
 } from "react-native";
+import { useRouter } from "expo-router";
 import Animated, {
     FadeInDown,
     useAnimatedStyle,
@@ -83,6 +84,7 @@ const RoleCard = ({
 };
 
 const RoleSelectionScreen = () => {
+    const router = useRouter();
     const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
 
     const roles = [
@@ -105,8 +107,7 @@ const RoleSelectionScreen = () => {
 
     const handleContinue = () => {
         if (!selectedRole) return;
-        console.log("Selected role:", selectedRole);
-        // Navigate to the registration screen
+        router.replace('/main' as any);
     };
 
     return (
