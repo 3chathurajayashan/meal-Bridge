@@ -1,23 +1,35 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import img1 from '../../assets/s1.png'; // Adjust path if needed for your third image asset
 import {
   View,
   Text,
   StyleSheet,
   Pressable,
   Animated,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 
 export default function OnboardingThird() {
   const router = useRouter();
 
+  // Animation states
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success'>('idle');
+
+  // Screen entrance animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
+  // Apple-like morphing button animations
+  const contentFadeAnim = useRef(new Animated.Value(1)).current;
+  const successScaleAnim = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
     fadeAnim.setValue(0);
     slideAnim.setValue(24);
+
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -33,6 +45,7 @@ export default function OnboardingThird() {
   }, []);
 
   const handlePressIn = () => {
+    if (status !== 'idle') return;
     Animated.spring(scaleAnim, {
       toValue: 0.96,
       useNativeDriver: true,
@@ -42,6 +55,7 @@ export default function OnboardingThird() {
   };
 
   const handlePressOut = () => {
+    if (status !== 'idle') return;
     Animated.spring(scaleAnim, {
       toValue: 1,
       useNativeDriver: true,
@@ -50,16 +64,38 @@ export default function OnboardingThird() {
     }).start();
   };
 
+  const handleGetStarted = () => {
+    if (status !== 'idle') return;
+    setStatus('loading');
+
+    // Step 1: Smoothly fade out current text and shrink button width slightly to feel dynamic
+    Animated.timing(contentFadeAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      // Simulate verification/loading delay (e.g., 1.2 seconds)
+      setTimeout(() => {
+        setStatus('success');
+        
+        // Pop in the success verification state smoothly
+        Animated.spring(successScaleAnim, {
+          toValue: 1,
+          friction: 6,
+          tension: 80,
+          useNativeDriver: true,
+        }).start(() => {
+          // Wait briefly to let the user register "All Set!", then navigate
+          setTimeout(() => {
+            router.push('/onboarding/RoleSelectionScreen' as any);
+          }, 600);
+        });
+      }, 1200);
+    });
+  };
+
   return (
     <View style={styles.container}>
-      <Pressable
-        style={styles.backButton}
-        hitSlop={12}
-        onPress={() => router.back()}
-      >
-        <View style={styles.backArrow} />
-      </Pressable>
-
       <Animated.View
         style={[
           styles.content,
@@ -69,22 +105,18 @@ export default function OnboardingThird() {
           },
         ]}
       >
-        <View style={styles.markWrap}>
-          <View style={styles.markOuter}>
-            <View style={styles.markSquareBack} />
-            <View style={styles.markSquareFront} />
-            <View style={styles.markCheck} />
-          </View>
-          <View style={styles.markAccentOne} />
-          <View style={styles.markAccentTwo} />
+        {/* Full-width and upper height edge-to-edge image */}
+        <View style={styles.imageWrap}>
+          <Image source={img1} style={styles.image} resizeMode="cover" />
         </View>
 
-        <Text style={styles.title}>You're All Set</Text>
-
-        <Text style={styles.description}>
-          Create an account to start ordering{'\n'}
-          and enjoy a seamless experience.
-        </Text>
+        <View style={styles.textContainer}>
+          <Text style={styles.title}>You're All Set</Text>
+          <Text style={styles.description}>
+            Create an account to start ordering{'\n'}
+            and enjoy a seamless experience.
+          </Text>
+        </View>
       </Animated.View>
 
       <View style={styles.bottom}>
@@ -95,9 +127,11 @@ export default function OnboardingThird() {
         </View>
 
         <Pressable
+          style={styles.pressable}
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
-          onPress={() => router.replace('/')}
+          onPress={handleGetStarted}
+          disabled={status !== 'idle'}
         >
           <Animated.View
             style={[
@@ -105,7 +139,31 @@ export default function OnboardingThird() {
               { transform: [{ scale: scaleAnim }] },
             ]}
           >
-            <Text style={styles.buttonText}>Get Started</Text>
+            {status === 'idle' && (
+              <Animated.Text style={[styles.buttonText, { opacity: contentFadeAnim }]}>
+                Get Started
+              </Animated.Text>
+            )}
+
+            {status === 'loading' && (
+              <Animated.View style={{ opacity: contentFadeAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [1, 0]
+              }) }}>
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              </Animated.View>
+            )}
+
+            {status === 'success' && (
+              <Animated.Text
+                style={[
+                  styles.buttonText,
+                  { transform: [{ scale: successScaleAnim }] },
+                ]}
+              >
+                All Set ✓
+              </Animated.Text>
+            )}
           </Animated.View>
         </Pressable>
       </View>
@@ -117,100 +175,33 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 28,
     justifyContent: 'space-between',
-  },
-
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F5F5F7',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 12,
-  },
-
-  backArrow: {
-    width: 9,
-    height: 9,
-    borderLeftWidth: 2,
-    borderBottomWidth: 2,
-    borderColor: '#1C1C1E',
-    transform: [{ rotate: '45deg' }],
-    marginLeft: 3,
   },
 
   content: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 20,
-  },
-
-  markWrap: {
-    width: 220,
-    height: 220,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 56,
-  },
-
-  markOuter: {
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: '#FFF5EC',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     alignItems: 'center',
   },
 
-  markSquareBack: {
-    position: 'absolute',
-    width: 96,
-    height: 96,
-    borderRadius: 24,
-    backgroundColor: '#FFE3CC',
-    transform: [{ rotate: '12deg' }],
-  },
-
-  markSquareFront: {
-    width: 96,
-    height: 96,
-    borderRadius: 24,
-    backgroundColor: '#FF6B00',
+  imageWrap: {
+    width: '100%',
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 24,
   },
 
-  markCheck: {
-    width: 34,
-    height: 18,
-    borderLeftWidth: 4,
-    borderBottomWidth: 4,
-    borderColor: '#FFFFFF',
-    transform: [{ rotate: '-45deg' }, { translateY: -3 }],
+  image: {
+    width: '100%',
+    height: '100%',
   },
 
-  markAccentOne: {
-    position: 'absolute',
-    top: 22,
-    right: 26,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#FFB88A',
-  },
-
-  markAccentTwo: {
-    position: 'absolute',
-    bottom: 24,
-    left: 20,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#FF6B00',
-    opacity: 0.85,
+  textContainer: {
+    paddingHorizontal: 28,
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 20,
   },
 
   title: {
@@ -233,6 +224,7 @@ const styles = StyleSheet.create({
 
   bottom: {
     paddingBottom: 50,
+    paddingHorizontal: 28,
     alignItems: 'center',
     width: '100%',
   },
@@ -255,6 +247,10 @@ const styles = StyleSheet.create({
     width: 22,
     borderRadius: 3,
     backgroundColor: '#FF6B00',
+  },
+
+  pressable: {
+    width: '100%',
   },
 
   button: {
