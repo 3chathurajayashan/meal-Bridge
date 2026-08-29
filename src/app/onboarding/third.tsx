@@ -97,7 +97,7 @@ export default function OnboardingThird() {
         <Pressable
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
-          onPress={() => router.push('/auth')}
+          onPress={() => router.push('/(donor)')}
         >
           <Animated.View
             style={[
