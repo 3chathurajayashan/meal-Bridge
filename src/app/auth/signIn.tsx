@@ -1,22 +1,22 @@
  
-import React, { useState } from "react";
+import { useRouter } from "expo-router";
+import { useState } from "react";
 import {
-    View,
-    Text,
-    StyleSheet,
-    TextInput,
-    TouchableOpacity,
-    SafeAreaView,
+    ActivityIndicator,
     KeyboardAvoidingView,
     Platform,
+    SafeAreaView,
     ScrollView,
-    ActivityIndicator,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
-import { useRouter } from "expo-router";
 import { useAuth } from "../../context/AuthContext";
 
-import SuccessMessage from "../../toasts/SuccessMessage";
 import ErrorMessage from "../../toasts/ErrorMessage";
+import SuccessMessage from "../../toasts/SuccessMessage";
 
 const SignIn = () => {
     const router = useRouter();
@@ -124,9 +124,11 @@ const SignIn = () => {
             // Check User Role
             // ==============================
 
-            if (data.user?.role !== "ADMIN") {
+            const role = data.user?.role;
+
+            if (role !== "ADMIN" && role !== "VOLUNTEER") {
                 throw new Error(
-                    "You are not authorized to access the admin dashboard."
+                    "You are not authorized to access this app."
                 );
             }
 
@@ -141,13 +143,15 @@ const SignIn = () => {
             setSuccessVisible(true);
 
             // ==============================
-            // Navigate to Dashboard
+            // Navigate to Role Dashboard
             // ==============================
 
             setTimeout(() => {
-                router.replace(
-                    "/dashboards/adminDashboard"
-                );
+                if (role === "VOLUNTEER") {
+                    router.replace("/volunteer");
+                } else {
+                    router.replace("/dashboards/adminDashboard");
+                }
             }, 1200);
 
         } catch (error) {

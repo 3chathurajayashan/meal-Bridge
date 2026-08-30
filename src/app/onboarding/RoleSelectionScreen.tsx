@@ -1,19 +1,19 @@
-import React, { useState } from "react";
+import { router } from "expo-router";
+import { useState } from "react";
 import {
-    View,
-    Text,
-    StyleSheet,
-    TouchableOpacity,
-    SafeAreaView,
     Dimensions,
+    SafeAreaView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import Animated, {
     FadeInDown,
     useAnimatedStyle,
-    withSpring,
     useSharedValue,
+    withSpring,
 } from "react-native-reanimated";
-import { router } from "expo-router";
 
 type UserRole = "DONOR" | "RECIPIENT" | "VOLUNTEER";
 
@@ -118,8 +118,13 @@ const RoleSelectionScreen = () => {
 
         console.log("Selected role:", selectedRole);
 
-        // If DONOR is selected, continue to dsignIn.tsx
-        if (selectedRole === "DONOR") {
+        // All roles that have a sign-in flow navigate to signIn.tsx.
+        // The signIn screen handles role-based dashboard routing after login.
+        if (
+            selectedRole === "DONOR" ||
+            selectedRole === "VOLUNTEER" ||
+            selectedRole === "RECIPIENT"
+        ) {
             router.push("/auth/signIn");
         }
     };
