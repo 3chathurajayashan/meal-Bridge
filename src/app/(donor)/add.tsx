@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Image, Alert, ActivityIndicator } from 'react-native';
 import { SymbolView } from 'expo-symbols';
+import { createDonation } from '../../services/api';
 
 const CATEGORIES = ['Prepared Meals', 'Groceries', 'Produce', 'Baked Goods'];
 const DIETARY_TAGS = ['Vegetarian', 'Vegan', 'Halal', 'Gluten-Free', 'Nut-Free'];
@@ -12,9 +13,42 @@ export default function AddDonationScreen() {
   const [expiry, setExpiry] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [instructions, setInstructions] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const toggleTag = (tag: string) => {
     setSelectedTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
+  };
+
+  const handleSubmit = async () => {
+    if (!title || !category || !quantity) {
+      Alert.alert('Missing Details', 'Please fill in the title, category, and quantity.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await createDonation({
+        title,
+        category,
+        quantity,
+        expiry,
+        dietaryTags: selectedTags,
+        instructions,
+      });
+      
+      Alert.alert('Success', 'Food donation created successfully!');
+      
+      setTitle('');
+      setCategory('');
+      setQuantity('');
+      setExpiry('');
+      setSelectedTags([]);
+      setInstructions('');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to create donation. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -124,9 +158,19 @@ export default function AddDonationScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.submitButton}>
-          <Text style={styles.submitButtonText}>Publish Donation</Text>
-          <SymbolView name="arrow.right" tintColor="#FFFFFF" size={20} fallback={null} />
+        <TouchableOpacity 
+          style={styles.submitButton} 
+          onPress={handleSubmit} 
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <>
+              <Text style={styles.submitButtonText}>Publish Donation</Text>
+              <SymbolView name="arrow.right" tintColor="#FFFFFF" size={20} fallback={null} />
+            </>
+          )}
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
