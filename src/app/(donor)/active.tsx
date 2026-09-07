@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, UIManager, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, UIManager, Platform, ActivityIndicator, Alert } from 'react-native';
 import { SymbolView } from 'expo-symbols';
+import { getActiveDonations, Donation } from '../../services/api';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -14,7 +15,53 @@ const TIMELINE_STEPS = [
 ];
 
 export default function ActiveDonationsScreen() {
-  const [expandedId, setExpandedId] = useState<string | null>('don-1');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [donations, setDonations] = useState<Donation[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchDonations();
+  }, []);
+
+  const fetchDonations = async () => {
+    try {
+      setLoading(true);
+      const data = await getActiveDonations();
+      setDonations(data);
+      if (data.length > 0) {
+        setExpandedId(data[0].id);
+      }
+    } catch (error) {
+      console.log('API error fetching donations:', error);
+      // Fallback to mock data for preview purposes if API is not running
+      setDonations([
+        {
+          id: 'don-1',
+          title: 'Bakery Surplus (20 items)',
+          category: 'Baked Goods',
+          quantity: '20 items',
+          expiry: 'Expires in 3 hours',
+          dietaryTags: [],
+          instructions: '',
+          status: 'picked_up',
+          volunteer: { name: 'Alex Johnson', role: 'NGO Volunteer' }
+        },
+        {
+          id: 'don-2',
+          title: 'Fresh Produce (5kg)',
+          category: 'Produce',
+          quantity: '5kg',
+          expiry: 'Expires in 12 hours',
+          dietaryTags: ['Vegan'],
+          instructions: '',
+          status: 'requested',
+        }
+      ]);
+      setExpandedId('don-1');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const toggleExpand = (id: string) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -27,7 +74,6 @@ export default function ActiveDonationsScreen() {
         {TIMELINE_STEPS.map((step, index) => {
           const isCompleted = index < currentStepIndex;
           const isActive = index === currentStepIndex;
-          const isPending = index > currentStepIndex;
 
           let iconColor = '#E5E5EA';
           let textColor = '#8E8E93';
@@ -70,6 +116,35 @@ export default function ActiveDonationsScreen() {
     );
   };
 
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'requested': return 'Pending';
+      case 'approved': return 'Approved';
+      case 'picked_up': return 'En Route';
+      case 'delivered': return 'Delivered';
+      default: return 'Unknown';
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'requested': return { bg: '#E3F2FD', text: '#1565C0' };
+      case 'approved': return { bg: '#E8F5E9', text: '#2E7D32' };
+      case 'picked_up': return { bg: '#FFF0E5', text: '#FF6B00' };
+      case 'delivered': return { bg: '#F2F2F7', text: '#8E8E93' };
+      default: return { bg: '#F2F2F7', text: '#8E8E93' };
+    }
+  };
+
+  const getCategoryIcon = (category: string) => {
+    switch (category.toLowerCase()) {
+      case 'produce': return 'leaf.fill';
+      case 'baked goods': return 'takeoutbag.and.cup.and.straw.fill';
+      case 'prepared meals': return 'fork.knife';
+      default: return 'takeoutbag.and.cup.and.straw.fill';
+    }
+  };
+
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <View style={styles.header}>
@@ -77,84 +152,87 @@ export default function ActiveDonationsScreen() {
         <Text style={styles.subtitle}>Track your ongoing food donations</Text>
       </View>
 
-      {/* Donation Card 1 - Active */}
-      <TouchableOpacity activeOpacity={0.9} onPress={() => toggleExpand('don-1')} style={styles.card}>
-        <View style={styles.cardHeader}>
-          <View style={styles.cardHeaderLeft}>
-            <View style={styles.iconBox}>
-              <SymbolView name="takeoutbag.and.cup.and.straw.fill" tintColor="#FF6B00" size={24} fallback={null} />
-            </View>
-            <View>
-              <Text style={styles.foodTitle}>Bakery Surplus (20 items)</Text>
-              <Text style={styles.timeText}>Expires in 3 hours</Text>
-            </View>
-          </View>
-          <View style={[styles.badge, { backgroundColor: '#FFF0E5' }]}>
-            <Text style={[styles.badgeText, { color: '#FF6B00' }]}>En Route</Text>
-          </View>
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#FF6B00" />
+          <Text style={styles.loadingText}>Fetching donations...</Text>
         </View>
-
-        {expandedId === 'don-1' && (
-          <View style={styles.expandedContent}>
-            <View style={styles.divider} />
-            
-            <View style={styles.volunteerInfo}>
-              <View style={styles.volunteerAvatar}>
-                <SymbolView name="person.crop.circle.fill" tintColor="#8E8E93" size={40} fallback={null} />
-              </View>
-              <View style={styles.volunteerDetails}>
-                <Text style={styles.volunteerName}>Alex Johnson</Text>
-                <Text style={styles.volunteerRole}>NGO Volunteer</Text>
-              </View>
-              <TouchableOpacity style={styles.contactButton}>
-                <SymbolView name="phone.fill" tintColor="#FF6B00" size={20} fallback={null} />
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.contactButton, { marginLeft: 8 }]}>
-                <SymbolView name="message.fill" tintColor="#FF6B00" size={20} fallback={null} />
-              </TouchableOpacity>
-            </View>
-            
-            <Text style={styles.trackerHeading}>Donation Status</Text>
-            {renderTimeline(2)} {/* Picked Up state */}
-          </View>
-        )}
-      </TouchableOpacity>
-
-      {/* Donation Card 2 - Pending */}
-      <TouchableOpacity activeOpacity={0.9} onPress={() => toggleExpand('don-2')} style={styles.card}>
-        <View style={styles.cardHeader}>
-          <View style={styles.cardHeaderLeft}>
-            <View style={[styles.iconBox, { backgroundColor: '#E3F2FD' }]}>
-              <SymbolView name="leaf.fill" tintColor="#1565C0" size={24} fallback={null} />
-            </View>
-            <View>
-              <Text style={styles.foodTitle}>Fresh Produce (5kg)</Text>
-              <Text style={styles.timeText}>Expires in 12 hours</Text>
-            </View>
-          </View>
-          <View style={[styles.badge, { backgroundColor: '#E3F2FD' }]}>
-            <Text style={[styles.badgeText, { color: '#1565C0' }]}>Pending</Text>
-          </View>
+      ) : donations.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>You have no active donations at the moment.</Text>
         </View>
+      ) : (
+        donations.map((donation) => {
+          const statusConfig = getStatusColor(donation.status);
+          const currentStepIndex = TIMELINE_STEPS.findIndex(step => step.id === donation.status);
+          const isExpanded = expandedId === donation.id;
 
-        {expandedId === 'don-2' && (
-          <View style={styles.expandedContent}>
-            <View style={styles.divider} />
-            
-            <Text style={styles.pendingText}>
-              Waiting for a volunteer or NGO to review and accept this donation request.
-            </Text>
-            
-            <Text style={styles.trackerHeading}>Donation Status</Text>
-            {renderTimeline(0)} {/* Requested state */}
+          return (
+            <TouchableOpacity 
+              key={donation.id} 
+              activeOpacity={0.9} 
+              onPress={() => toggleExpand(donation.id)} 
+              style={styles.card}
+            >
+              <View style={styles.cardHeader}>
+                <View style={styles.cardHeaderLeft}>
+                  <View style={[styles.iconBox, { backgroundColor: statusConfig.bg }]}>
+                    <SymbolView name={getCategoryIcon(donation.category) as any} tintColor={statusConfig.text} size={24} fallback={null} />
+                  </View>
+                  <View>
+                    <Text style={styles.foodTitle}>{donation.title}</Text>
+                    <Text style={styles.timeText}>{donation.expiry}</Text>
+                  </View>
+                </View>
+                <View style={[styles.badge, { backgroundColor: statusConfig.bg }]}>
+                  <Text style={[styles.badgeText, { color: statusConfig.text }]}>
+                    {getStatusText(donation.status)}
+                  </Text>
+                </View>
+              </View>
 
-            <TouchableOpacity style={styles.cancelButton}>
-              <Text style={styles.cancelButtonText}>Cancel Request</Text>
+              {isExpanded && (
+                <View style={styles.expandedContent}>
+                  <View style={styles.divider} />
+                  
+                  {donation.volunteer && (
+                    <View style={styles.volunteerInfo}>
+                      <View style={styles.volunteerAvatar}>
+                        <SymbolView name="person.crop.circle.fill" tintColor="#8E8E93" size={40} fallback={null} />
+                      </View>
+                      <View style={styles.volunteerDetails}>
+                        <Text style={styles.volunteerName}>{donation.volunteer.name}</Text>
+                        <Text style={styles.volunteerRole}>{donation.volunteer.role}</Text>
+                      </View>
+                      <TouchableOpacity style={styles.contactButton}>
+                        <SymbolView name="phone.fill" tintColor="#FF6B00" size={20} fallback={null} />
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[styles.contactButton, { marginLeft: 8 }]}>
+                        <SymbolView name="message.fill" tintColor="#FF6B00" size={20} fallback={null} />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {donation.status === 'requested' && (
+                    <Text style={styles.pendingText}>
+                      Waiting for a volunteer or NGO to review and accept this donation request.
+                    </Text>
+                  )}
+                  
+                  <Text style={styles.trackerHeading}>Donation Status</Text>
+                  {renderTimeline(Math.max(0, currentStepIndex))}
+
+                  {donation.status === 'requested' && (
+                    <TouchableOpacity style={styles.cancelButton}>
+                      <Text style={styles.cancelButtonText}>Cancel Request</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
             </TouchableOpacity>
-          </View>
-        )}
-      </TouchableOpacity>
-
+          );
+        })
+      )}
     </ScrollView>
   );
 }
@@ -178,6 +256,24 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     color: '#8E8E93',
+  },
+  loadingContainer: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    color: '#8E8E93',
+    fontSize: 15,
+  },
+  emptyContainer: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyText: {
+    color: '#8E8E93',
+    fontSize: 15,
+    textAlign: 'center',
   },
   card: {
     backgroundColor: '#FFFFFF',
