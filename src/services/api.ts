@@ -61,3 +61,24 @@ export const getActiveDonations = async (): Promise<Donation[]> => {
     throw error;
   }
 };
+
+export const getDonationHistory = async (): Promise<Donation[]> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/donations/history`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Failed to fetch donation history');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching donation history:', error);
+    throw error;
+  }
+};
