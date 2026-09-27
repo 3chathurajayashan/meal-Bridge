@@ -1,0 +1,820 @@
+/**
+ * Ongoing Delivery Screen — Light UI
+ *
+ * Active delivery tracking interface:
+ *   - Map placeholder with animated route
+ *   - Bottom sheet: trip info, progress stepper, morphing CTA button
+ *   - Report Issue modal
+ *   - Completion success modal → navigates to /volunteer (Dashboard)
+ */
+
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
+    View,
+    Text,
+    StyleSheet,
+    SafeAreaView,
+    TouchableOpacity,
+    ScrollView,
+    ActivityIndicator,
+    Modal,
+    Animated,
+    Dimensions,
+    Linking,
+    Platform,
+} from "react-native";
+import { useRouter, useFocusEffect } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { useAuth } from "../../../context/AuthContext";
+import { volunteerApi } from "../../../services/api";
+import type { Delivery } from "../../../types/volunteer";
+
+const { height: SCREEN_H } = Dimensions.get("window");
+const SHEET_H = SCREEN_H * 0.52;
+
+// ─────────────────────────────────────────────────────────────
+// Map placeholder
+// ─────────────────────────────────────────────────────────────
+const LiveMap: React.FC<{ delivery: Delivery; status: string }> = ({
+    delivery,
+    status,
+}) => {
+    const dotAnim  = useRef(new Animated.Value(0)).current;
+    const lineAnim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(dotAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+                Animated.timing(dotAnim, { toValue: 0, duration: 800, useNativeDriver: true }),
+            ])
+        ).start();
+
+        Animated.timing(lineAnim, { toValue: 1, duration: 1200, useNativeDriver: false }).start();
+    }, []);
+
+    const lineWidth = lineAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 180] });
+    const isPickup  = status === "ACCEPTED";
+
+    const openMaps = (addr: string) => {
+        const q   = encodeURIComponent(addr);
+        const url = Platform.OS === "ios" ? `maps://?daddr=${q}` : `geo:0,0?q=${q}`;
+        Linking.openURL(url).catch(() =>
+            Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${q}`)
+        );
+    };
+
+    const targetAddr = isPickup
+        ? (delivery.pickupAddress.fullAddress  ?? delivery.pickupAddress.street  ?? "")
+        : (delivery.dropOffAddress.fullAddress ?? delivery.dropOffAddress.street ?? "");
+
+    return (
+        <View style={mapS.container}>
+            {/* Grid lines */}
+            {Array.from({ length: 10 }).map((_, i) => (
+                <View key={`h${i}`} style={[mapS.gridH, { top: `${i * 11}%` as any }]} />
+            ))}
+            {Array.from({ length: 7 }).map((_, i) => (
+                <View key={`v${i}`} style={[mapS.gridV, { left: `${i * 17}%` as any }]} />
+            ))}
+
+            {/* Animated route line */}
+            <Animated.View style={[mapS.routeLine, { width: lineWidth }]} />
+
+            {/* Pickup pin */}
+            <View style={[mapS.pin, mapS.pinPickup]}>
+                <Text style={mapS.pinLabel}>P</Text>
+            </View>
+            <Text style={[mapS.pinText, { top: "28%", left: "16%" }]}>Pickup</Text>
+
+            {/* Drop-off pin */}
+            <View style={[mapS.pin, mapS.pinDropoff]}>
+                <Text style={mapS.pinLabel}>D</Text>
+            </View>
+            <Text style={[mapS.pinText, { bottom: "22%", right: "10%" }]}>Drop-off</Text>
+
+            {/* Volunteer dot */}
+            <Animated.View
+                style={[
+                    mapS.volunteerDot,
+                    isPickup ? mapS.volunteerNearPickup : mapS.volunteerNearDropoff,
+                    {
+                        opacity: dotAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0.7, 1],
+                        }),
+                    },
+                ]}
+            >
+                <Ionicons name="car" size={16} color="#FF6B00" />
+            </Animated.View>
+
+            {/* Status chip */}
+            <View style={mapS.statusChip}>
+                <View style={mapS.statusChipDot} />
+                <Text style={mapS.statusChipText}>
+                    {status === "ACCEPTED"   ? "Heading to Pickup"    :
+                     status === "PICKED_UP"  ? "Food Collected"       :
+                     status === "IN_TRANSIT" ? "En Route to Drop-off" : ""}
+                </Text>
+            </View>
+
+            {/* Navigate button */}
+            <TouchableOpacity
+                style={mapS.navBtn}
+                onPress={() => openMaps(targetAddr)}
+                activeOpacity={0.85}
+            >
+                <Ionicons name="navigate-outline" size={14} color="#FFF" />
+                <Text style={mapS.navBtnText}>Navigate</Text>
+            </TouchableOpacity>
+        </View>
+    );
+};
+
+const mapS = StyleSheet.create({
+    container: {
+        flex: 1, backgroundColor: "#EAF0F8",
+        position: "relative", overflow: "hidden",
+    },
+    gridH: {
+        position: "absolute", left: 0, right: 0,
+        height: StyleSheet.hairlineWidth, backgroundColor: "#D4DDE8",
+    },
+    gridV: {
+        position: "absolute", top: 0, bottom: 0,
+        width: StyleSheet.hairlineWidth, backgroundColor: "#D4DDE8",
+    },
+    routeLine: {
+        position: "absolute", top: "42%", left: "18%",
+        height: 3, borderRadius: 2,
+        backgroundColor: "#FF6B00", opacity: 0.8,
+        transform: [{ rotate: "18deg" }],
+    },
+    pin: {
+        position: "absolute",
+        width: 32, height: 32, borderRadius: 16,
+        alignItems: "center", justifyContent: "center",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3, shadowRadius: 6, elevation: 4,
+    },
+    pinPickup:  { top: "25%", left: "14%", backgroundColor: "#FF6B00", shadowColor: "#FF6B00" },
+    pinDropoff: { bottom: "26%", right: "12%", backgroundColor: "#34C759", shadowColor: "#34C759" },
+    pinLabel:   { color: "#FFF", fontSize: 13, fontWeight: "800" },
+    pinText: {
+        position: "absolute", fontSize: 10, fontWeight: "700", color: "#3C3C43",
+        backgroundColor: "rgba(255,255,255,0.85)",
+        paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
+    },
+    volunteerDot: {
+        position: "absolute",
+        width: 38, height: 38, borderRadius: 19,
+        backgroundColor: "rgba(255,107,0,0.15)",
+        borderWidth: 2, borderColor: "#FF6B00",
+        alignItems: "center", justifyContent: "center",
+    },
+    volunteerNearPickup:  { top: "35%", left: "28%" },
+    volunteerNearDropoff: { top: "40%", left: "50%" },
+    statusChip: {
+        position: "absolute", top: 14, left: 14,
+        flexDirection: "row", alignItems: "center",
+        backgroundColor: "rgba(255,255,255,0.92)",
+        borderRadius: 20, borderWidth: 1, borderColor: "#E5E5EA",
+        paddingHorizontal: 12, paddingVertical: 6, gap: 6,
+        shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08, shadowRadius: 6, elevation: 3,
+    },
+    statusChipDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#FF6B00" },
+    statusChipText: { fontSize: 12, fontWeight: "600", color: "#1C1C1E" },
+    navBtn: {
+        position: "absolute", top: 14, right: 14,
+        flexDirection: "row", alignItems: "center", gap: 5,
+        backgroundColor: "#FF6B00", borderRadius: 20,
+        paddingHorizontal: 14, paddingVertical: 8,
+        shadowColor: "#FF6B00", shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3, shadowRadius: 8, elevation: 5,
+    },
+    navBtnText: { fontSize: 13, fontWeight: "700", color: "#FFF" },
+});
+
+// ─────────────────────────────────────────────────────────────
+// CTA config per status
+// ─────────────────────────────────────────────────────────────
+type CTAConfig = {
+    label: string;
+    action: "pickup" | "transit" | "delivered";
+    color: string;
+} | null;
+
+function resolveCTA(status: string): CTAConfig {
+    switch (status) {
+        case "ACCEPTED":   return { label: "Confirm Pickup", action: "pickup",    color: "#FF6B00" };
+        case "PICKED_UP":  return { label: "Start Transit",  action: "transit",   color: "#007AFF" };
+        case "IN_TRANSIT": return { label: "Mark Delivered", action: "delivered", color: "#34C759" };
+        default:           return null;
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Main screen
+// ─────────────────────────────────────────────────────────────
+export default function OngoingDelivery() {
+    const router          = useRouter();
+    const { accessToken } = useAuth();
+
+    const [delivery, setDelivery]           = useState<Delivery | null>(null);
+    const [loading, setLoading]             = useState(true);
+    const [actionLoading, setActionLoading] = useState(false);
+    const [error, setError]                 = useState<string | null>(null);
+    const [showReport, setShowReport]       = useState(false);
+    const [showComplete, setShowComplete]   = useState(false);
+    const [cancelling, setCancelling]       = useState(false);
+
+    const sheetAnim   = useRef(new Animated.Value(SHEET_H)).current;
+    const successAnim = useRef(new Animated.Value(0.6)).current;
+
+    const fetchActive = useCallback(async () => {
+        if (!accessToken) return;
+        setLoading(true);
+        try {
+            setError(null);
+            const summary = await volunteerApi.getSummary(accessToken);
+            setDelivery(summary.activeDelivery ?? null);
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Failed to load active delivery.");
+        } finally {
+            setLoading(false);
+            Animated.spring(sheetAnim, {
+                toValue: 0,
+                useNativeDriver: true,
+                tension: 65, friction: 11,
+            }).start();
+        }
+    }, [accessToken]);
+
+    const handleCancel = async () => {
+        if (!accessToken || !delivery || cancelling) return;
+        setCancelling(true);
+        try {
+            await volunteerApi.cancelDelivery(delivery.id, accessToken);
+            setShowReport(false);
+            // Delivery released — go back to dashboard
+            router.replace("/volunteer");
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Failed to cancel delivery.");
+            setShowReport(false);
+        } finally {
+            setCancelling(false);
+        }
+    };
+
+    // Re-fetch every time this tab comes into focus — this ensures
+    // live updates after accepting a delivery or returning from another tab.
+    useFocusEffect(
+        useCallback(() => {
+            fetchActive();
+        }, [fetchActive])
+    );
+
+    const handleAction = async (action: "pickup" | "transit" | "delivered") => {
+        if (!accessToken || !delivery || actionLoading) return;
+        setActionLoading(true);
+        try {
+            let updated: Delivery;
+            switch (action) {
+                case "pickup":
+                    updated = await volunteerApi.confirmPickup(delivery.id, accessToken);
+                    break;
+                case "transit":
+                    updated = await volunteerApi.startTransit(delivery.id, accessToken);
+                    break;
+                case "delivered":
+                    updated = await volunteerApi.confirmDelivered(delivery.id, accessToken);
+                    setShowComplete(true);
+                    Animated.spring(successAnim, {
+                        toValue: 1, useNativeDriver: true,
+                        tension: 80, friction: 8,
+                    }).start();
+                    // Navigate to Dashboard after 2.5s
+                    setTimeout(() => {
+                        setShowComplete(false);
+                        router.replace("/volunteer");
+                    }, 2500);
+                    break;
+            }
+            setDelivery(updated!);
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Action failed.");
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    // ── Loading ────────────────────────────────────────────────
+    if (loading) {
+        return (
+            <SafeAreaView style={s.safeArea}>
+                <View style={s.center}>
+                    <ActivityIndicator size="large" color="#FF6B00" />
+                    <Text style={s.loadingText}>Loading active delivery…</Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    // ── No active delivery ─────────────────────────────────────
+    if (!delivery) {
+        return (
+            <SafeAreaView style={s.safeArea}>
+                <View style={s.noDelivery}>
+                    <Ionicons name="car-outline" size={64} color="#C7C7CC" style={{ marginBottom: 20 }} />
+                    <Text style={s.noDeliveryTitle}>No Active Delivery</Text>
+                    <Text style={s.noDeliverySubtitle}>
+                        Accept a delivery from the Dashboard to start tracking here.
+                    </Text>
+                    <TouchableOpacity
+                        style={s.dashboardBtn}
+                        onPress={() => router.replace("/volunteer")}
+                        activeOpacity={0.85}
+                    >
+                        <Text style={s.dashboardBtnText}>Browse Available Deliveries</Text>
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    const cta     = resolveCTA(delivery.status);
+    const pickup  = delivery.pickupAddress;
+    const dropoff = delivery.dropOffAddress;
+
+    // Donor name — comes from delivery.donor.name (populated by adapter)
+    const donorName     = delivery.donor?.name     || "—";
+    const recipientName = delivery.recipient?.name || "—";
+
+    return (
+        <SafeAreaView style={s.safeArea}>
+            {/* ── Map (fills space above sheet) ───────── */}
+            <View style={s.mapContainer}>
+                <LiveMap delivery={delivery} status={delivery.status} />
+            </View>
+
+            {/* ── Bottom sheet ─────────────────────────── */}
+            <Animated.View
+                style={[s.sheet, { transform: [{ translateY: sheetAnim }] }]}
+            >
+                <View style={s.sheetHandle} />
+
+                <ScrollView
+                    showsVerticalScrollIndicator={false}
+                    style={s.sheetScroll}
+                    contentContainerStyle={s.sheetContent}
+                >
+                    {/* Food name + status badge */}
+                    <View style={s.sheetHeader}>
+                        <View style={s.sheetFoodInfo}>
+                            <Text style={s.sheetFoodName} numberOfLines={1}>
+                                {delivery.donation.foodName}
+                            </Text>
+                            <Text style={s.sheetQty}>{delivery.donation.quantity}</Text>
+                        </View>
+                        <View style={s.statusBadge}>
+                            <View style={s.statusBadgeDot} />
+                            <Text style={s.statusBadgeText}>
+                                {delivery.status.replace("_", " ")}
+                            </Text>
+                        </View>
+                    </View>
+
+                    {/* Progress stepper */}
+                    <View style={s.progressRow}>
+                        {["ACCEPTED", "PICKED_UP", "IN_TRANSIT", "DELIVERED"].map((step, i) => {
+                            const order = ["ACCEPTED", "PICKED_UP", "IN_TRANSIT", "DELIVERED"];
+                            const cur   = order.indexOf(delivery.status);
+                            const done  = i < cur;
+                            const active = i === cur;
+                            return (
+                                <React.Fragment key={step}>
+                                    <View style={[
+                                        s.progressDot,
+                                        done   && s.progressDotDone,
+                                        active && s.progressDotActive,
+                                    ]}>
+                                        {done && <Ionicons name="checkmark" size={12} color="#FFF" />}
+                                    </View>
+                                    {i < 3 && (
+                                        <View style={[s.progressLine, done && s.progressLineDone]} />
+                                    )}
+                                </React.Fragment>
+                            );
+                        })}
+                    </View>
+                    <View style={s.progressLabels}>
+                        {["Accepted", "Picked Up", "In Transit", "Delivered"].map((l) => (
+                            <Text key={l} style={s.progressLabel}>{l}</Text>
+                        ))}
+                    </View>
+
+                    {/* Route card */}
+                    <View style={s.routeCard}>
+                        <View style={s.routeRow}>
+                            <View style={[s.routeDot, { backgroundColor: "#FF6B00" }]} />
+                            <View style={s.routeInfo}>
+                                <Text style={s.routeRoleLabel}>PICKUP</Text>
+                                <Text style={s.routeAddr} numberOfLines={1}>
+                                    {pickup.fullAddress ?? pickup.street ?? "—"}
+                                </Text>
+                            </View>
+                        </View>
+                        <View style={s.routeConnector} />
+                        <View style={s.routeRow}>
+                            <View style={[s.routeDot, { backgroundColor: "#34C759" }]} />
+                            <View style={s.routeInfo}>
+                                <Text style={s.routeRoleLabel}>DROP-OFF</Text>
+                                <Text style={s.routeAddr} numberOfLines={1}>
+                                    {dropoff.fullAddress ?? dropoff.street ?? "—"}
+                                </Text>
+                            </View>
+                        </View>
+                    </View>
+
+                    {/* Contact cards — donor name fixed via adapter */}
+                    <View style={s.contactRow}>
+                        <View style={s.contactCard}>
+                            <Text style={s.contactRole}>DONOR</Text>
+                            <Text style={s.contactName}>{donorName}</Text>
+                            {delivery.donor?.phone ? (
+                                <TouchableOpacity
+                                    style={s.callBtn}
+                                    onPress={() =>
+                                        Linking.openURL(`tel:${delivery.donor.phone}`)
+                                    }
+                                >
+                                    <Text style={s.callBtnText}>📞 Call</Text>
+                                </TouchableOpacity>
+                            ) : null}
+                        </View>
+
+                        <View style={s.contactCard}>
+                            <Text style={s.contactRole}>RECIPIENT</Text>
+                            <Text style={s.contactName}>{recipientName}</Text>
+                            {delivery.recipient?.phone ? (
+                                <TouchableOpacity
+                                    style={s.callBtn}
+                                    onPress={() =>
+                                        Linking.openURL(`tel:${delivery.recipient.phone}`)
+                                    }
+                                >
+                                    <Text style={s.callBtnText}>📞 Call</Text>
+                                </TouchableOpacity>
+                            ) : null}
+                        </View>
+                    </View>
+
+                    {/* Error */}
+                    {error ? (
+                        <View style={s.errorBanner}>
+                            <Text style={s.errorText}>{error}</Text>
+                            <TouchableOpacity onPress={() => setError(null)}>
+                                <Text style={s.errorDismiss}>✕</Text>
+                            </TouchableOpacity>
+                        </View>
+                    ) : null}
+
+                    {/* CTA button */}
+                    {cta ? (
+                        <TouchableOpacity
+                            style={[
+                                s.ctaBtn,
+                                { backgroundColor: cta.color, shadowColor: cta.color },
+                                actionLoading && s.ctaBtnDisabled,
+                            ]}
+                            onPress={() => handleAction(cta.action)}
+                            disabled={actionLoading}
+                            activeOpacity={0.85}
+                        >
+                            {actionLoading ? (
+                                <ActivityIndicator color="#FFF" size="small" />
+                            ) : (
+                                <Text style={s.ctaBtnText}>{cta.label}</Text>
+                            )}
+                        </TouchableOpacity>
+                    ) : null}
+
+                    {/* Report issue */}
+                    {delivery.status !== "DELIVERED" &&
+                     delivery.status !== "CANCELLED" ? (
+                        <TouchableOpacity
+                            style={s.reportBtn}
+                            onPress={() => setShowReport(true)}
+                            activeOpacity={0.75}
+                        >
+                            <Ionicons name="warning-outline" size={16} color="#FF3B30" style={{ marginRight: 6 }} />
+                            <Text style={s.reportBtnText}>Report Issue / Cancel Task</Text>
+                        </TouchableOpacity>
+                    ) : null}
+
+                    <View style={{ height: 16 }} />
+                </ScrollView>
+            </Animated.View>
+
+            {/* ── Report Issue modal ───────────────────── */}
+            <Modal
+                visible={showReport}
+                transparent
+                animationType="slide"
+                statusBarTranslucent
+            >
+                <View style={s.modalOverlay}>
+                    <View style={s.reportModal}>
+                        <Text style={s.reportTitle}>Report an Issue</Text>
+                        <Text style={s.reportSubtitle}>
+                            Select your reason. This will cancel the delivery
+                            and release it back to the available pool.
+                        </Text>
+                        {[
+                            "Donor not reachable",
+                            "Recipient not reachable",
+                            "Food quality concern",
+                            "Unable to locate address",
+                            "Personal emergency",
+                        ].map((issue) => (
+                            <TouchableOpacity
+                                key={issue}
+                                style={s.reportOption}
+                                onPress={handleCancel}
+                                activeOpacity={0.8}
+                                disabled={cancelling}
+                            >
+                                {cancelling ? (
+                                    <ActivityIndicator color="#FF6B00" size="small" />
+                                ) : (
+                                    <Text style={s.reportOptionText}>{issue}</Text>
+                                )}
+                            </TouchableOpacity>
+                        ))}
+                        <TouchableOpacity
+                            style={s.reportClose}
+                            onPress={() => setShowReport(false)}
+                        >
+                            <Text style={s.reportCloseText}>Cancel</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ── Delivery complete modal ──────────────── */}
+            <Modal
+                visible={showComplete}
+                transparent
+                animationType="fade"
+                statusBarTranslucent
+            >
+                <View style={s.modalOverlay}>
+                    <Animated.View
+                        style={[
+                            s.completeModal,
+                            { transform: [{ scale: successAnim }] },
+                        ]}
+                    >
+                        <View style={s.completeIconCircle}>
+                            <Ionicons name="checkmark" size={38} color="#FFF" />
+                        </View>
+                        <Text style={s.completeTitle}>Delivery Complete!</Text>
+                        <Text style={s.completeSubtitle}>
+                            You've successfully delivered{"\n"}
+                            {delivery.donation.foodName}
+                        </Text>
+                        <View style={s.completeStats}>
+                            <View style={s.completeStat}>
+                                <Text style={s.completeStatValue}>
+                                    {delivery.donation.quantity}
+                                </Text>
+                                <Text style={s.completeStatLabel}>Items Saved</Text>
+                            </View>
+                            <View style={s.completeStatDivider} />
+                            <View style={s.completeStat}>
+                                <Text style={s.completeStatValue}>✓</Text>
+                                <Text style={s.completeStatLabel}>Done</Text>
+                            </View>
+                        </View>
+                        <ActivityIndicator color="#FF6B00" style={{ marginTop: 16 }} />
+                    </Animated.View>
+                </View>
+            </Modal>
+        </SafeAreaView>
+    );
+}
+
+const s = StyleSheet.create({
+    safeArea: { flex: 1, backgroundColor: "#F2F2F7" },
+    center:   { flex: 1, alignItems: "center", justifyContent: "center" },
+    loadingText: { color: "#8E8E93", fontSize: 14, marginTop: 12 },
+
+    // No delivery
+    noDelivery: {
+        flex: 1, alignItems: "center", justifyContent: "center",
+        paddingHorizontal: 32,
+    },
+    noDeliveryTitle:    { fontSize: 22, fontWeight: "800", color: "#1C1C1E", marginBottom: 10, letterSpacing: -0.5 },
+    noDeliverySubtitle: { fontSize: 15, color: "#8E8E93", textAlign: "center", lineHeight: 22, marginBottom: 32 },
+    dashboardBtn: {
+        backgroundColor: "#FF6B00", borderRadius: 16,
+        paddingHorizontal: 28, paddingVertical: 14,
+        shadowColor: "#FF6B00", shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.3, shadowRadius: 10, elevation: 6,
+    },
+    dashboardBtnText: { color: "#FFF", fontSize: 16, fontWeight: "700" },
+
+    // Map
+    mapContainer: { flex: 1 },
+
+    // Sheet
+    sheet: {
+        position: "absolute", left: 0, right: 0, bottom: 0,
+        height: SHEET_H,
+        backgroundColor: "#FFFFFF",
+        borderTopLeftRadius: 24, borderTopRightRadius: 24,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderColor: "#E5E5EA",
+        paddingTop: 10,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.08, shadowRadius: 12, elevation: 12,
+    },
+    sheetHandle: {
+        width: 36, height: 4, borderRadius: 2,
+        backgroundColor: "#C7C7CC", alignSelf: "center", marginBottom: 14,
+    },
+    sheetScroll: { flex: 1 },
+    sheetContent: { paddingHorizontal: 20, paddingBottom: 24 },
+
+    // Sheet header
+    sheetHeader: {
+        flexDirection: "row", alignItems: "flex-start",
+        justifyContent: "space-between", marginBottom: 16,
+    },
+    sheetFoodInfo: { flex: 1, marginRight: 12 },
+    sheetFoodName: {
+        fontSize: 18, fontWeight: "800", color: "#1C1C1E",
+        letterSpacing: -0.4, marginBottom: 2,
+    },
+    sheetQty: { fontSize: 13, color: "#8E8E93", fontWeight: "500" },
+    statusBadge: {
+        flexDirection: "row", alignItems: "center",
+        backgroundColor: "#FFF3E8", borderRadius: 10,
+        paddingHorizontal: 10, paddingVertical: 5, gap: 5,
+    },
+    statusBadgeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#FF6B00" },
+    statusBadgeText: { fontSize: 11, fontWeight: "700", color: "#FF6B00", letterSpacing: 0.3 },
+
+    // Progress
+    progressRow: { flexDirection: "row", alignItems: "center", marginBottom: 4 },
+    progressDot: {
+        width: 22, height: 22, borderRadius: 11,
+        backgroundColor: "#E5E5EA",
+        alignItems: "center", justifyContent: "center",
+    },
+    progressDotDone:   { backgroundColor: "#34C759" },
+    progressDotActive: {
+        backgroundColor: "#FF6B00",
+        shadowColor: "#FF6B00", shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.5, shadowRadius: 6, elevation: 4,
+    },
+    progressCheck: { color: "#FFF", fontSize: 11, fontWeight: "800" },
+    progressLine: {
+        flex: 1, height: 2, borderRadius: 1,
+        backgroundColor: "#E5E5EA", marginHorizontal: 4,
+    },
+    progressLineDone: { backgroundColor: "#34C759" },
+    progressLabels: {
+        flexDirection: "row", justifyContent: "space-between", marginBottom: 14,
+    },
+    progressLabel: {
+        fontSize: 9, color: "#8E8E93", fontWeight: "600",
+        letterSpacing: 0.3, width: 50, textAlign: "center",
+    },
+
+    // Route card
+    routeCard: {
+        backgroundColor: "#F9F9FB", borderRadius: 14,
+        borderWidth: 1, borderColor: "#E5E5EA",
+        padding: 14, marginBottom: 12,
+    },
+    routeRow: { flexDirection: "row", alignItems: "center" },
+    routeDot: { width: 10, height: 10, borderRadius: 5, marginRight: 10 },
+    routeConnector: {
+        width: 1.5, height: 14, backgroundColor: "#C7C7CC",
+        marginLeft: 4, marginVertical: 3,
+    },
+    routeInfo: { flex: 1 },
+    routeRoleLabel: {
+        fontSize: 9, fontWeight: "700", color: "#8E8E93",
+        letterSpacing: 1, marginBottom: 1,
+    },
+    routeAddr: { fontSize: 13, fontWeight: "500", color: "#1C1C1E" },
+
+    // Contacts
+    contactRow: { flexDirection: "row", gap: 10, marginBottom: 14 },
+    contactCard: {
+        flex: 1, backgroundColor: "#F9F9FB",
+        borderRadius: 12, borderWidth: 1, borderColor: "#E5E5EA",
+        padding: 12,
+    },
+    contactRole:  {
+        fontSize: 9, fontWeight: "700", color: "#8E8E93",
+        letterSpacing: 1, marginBottom: 4,
+    },
+    contactName:  { fontSize: 13, fontWeight: "600", color: "#1C1C1E", marginBottom: 8 },
+    callBtn: {
+        backgroundColor: "#FFF3E8", borderRadius: 8,
+        paddingVertical: 5, alignItems: "center",
+        borderWidth: 1, borderColor: "#FFD5A8",
+    },
+    callBtnText: { fontSize: 12, fontWeight: "600", color: "#FF6B00" },
+
+    // Error
+    errorBanner: {
+        flexDirection: "row", alignItems: "center",
+        justifyContent: "space-between", marginBottom: 12,
+        backgroundColor: "#FFF0EF", borderRadius: 10,
+        paddingHorizontal: 14, paddingVertical: 8,
+        borderWidth: 1, borderColor: "rgba(255,59,48,0.2)",
+    },
+    errorText:    { flex: 1, fontSize: 12, color: "#FF3B30", fontWeight: "500" },
+    errorDismiss: { fontSize: 14, color: "#8E8E93", marginLeft: 8 },
+
+    // CTA
+    ctaBtn: {
+        height: 56, borderRadius: 16,
+        alignItems: "center", justifyContent: "center",
+        marginBottom: 10,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.28, shadowRadius: 12, elevation: 8,
+    },
+    ctaBtnDisabled: { opacity: 0.5, shadowOpacity: 0, elevation: 0 },
+    ctaBtnText: { fontSize: 17, fontWeight: "800", color: "#FFF", letterSpacing: -0.3 },
+
+    // Report
+    reportBtn: {
+        alignItems: "center", paddingVertical: 12,
+        borderRadius: 12, borderWidth: 1,
+        borderColor: "rgba(255,59,48,0.3)",
+        backgroundColor: "#FFF0EF",
+    },
+    reportBtnText: { fontSize: 14, fontWeight: "600", color: "#FF3B30" },
+
+    // Modals
+    modalOverlay: {
+        flex: 1, backgroundColor: "rgba(0,0,0,0.4)",
+        alignItems: "center", justifyContent: "flex-end",
+    },
+    reportModal: {
+        width: "100%", backgroundColor: "#FFFFFF",
+        borderTopLeftRadius: 28, borderTopRightRadius: 28,
+        padding: 24,
+        borderTopWidth: StyleSheet.hairlineWidth, borderColor: "#E5E5EA",
+    },
+    reportTitle:    { fontSize: 20, fontWeight: "800", color: "#1C1C1E", marginBottom: 6 },
+    reportSubtitle: { fontSize: 13, color: "#8E8E93", marginBottom: 20, lineHeight: 18 },
+    reportOption: {
+        paddingVertical: 14,
+        borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#E5E5EA",
+    },
+    reportOptionText: { fontSize: 15, color: "#1C1C1E", fontWeight: "500" },
+    reportClose: {
+        marginTop: 16, alignItems: "center",
+        paddingVertical: 14, backgroundColor: "#F2F2F7", borderRadius: 14,
+    },
+    reportCloseText: { fontSize: 15, fontWeight: "700", color: "#8E8E93" },
+
+    // Complete modal
+    completeModal: {
+        width: 300, backgroundColor: "#FFFFFF",
+        borderRadius: 28, padding: 32, alignItems: "center",
+        shadowColor: "#000", shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.12, shadowRadius: 20, elevation: 10,
+        marginBottom: 60,
+    },
+    completeIconCircle: {
+        width: 72, height: 72, borderRadius: 36,
+        backgroundColor: "#34C759",
+        alignItems: "center", justifyContent: "center",
+        marginBottom: 16,
+        shadowColor: "#34C759", shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3, shadowRadius: 10, elevation: 6,
+    },
+    completeIconText:  { color: "#FFF", fontSize: 34, fontWeight: "800" },
+    completeTitle:     { fontSize: 24, fontWeight: "800", color: "#1C1C1E", marginBottom: 10, letterSpacing: -0.5 },
+    completeSubtitle:  { fontSize: 14, color: "#8E8E93", textAlign: "center", lineHeight: 20, marginBottom: 20 },
+    completeStats: {
+        flexDirection: "row", alignItems: "center",
+        backgroundColor: "#F2F2F7", borderRadius: 14,
+        paddingHorizontal: 24, paddingVertical: 14,
+        borderWidth: 1, borderColor: "#E5E5EA", gap: 24,
+    },
+    completeStat:        { alignItems: "center" },
+    completeStatValue:   { fontSize: 22, fontWeight: "800", color: "#1C1C1E" },
+    completeStatLabel:   { fontSize: 11, color: "#8E8E93", marginTop: 2 },
+    completeStatDivider: { width: 1, height: 32, backgroundColor: "#E5E5EA" },
+});
