@@ -228,6 +228,16 @@ export const volunteerApi = {
         return adaptDelivery(res.delivery);
     },
 
+    // ── Cancel a delivery (volunteer releases it back to PENDING) ──
+    // PUT /api/delivery/:id/cancel
+    cancelDelivery: async (id: string, token: string): Promise<void> => {
+        await apiRequest<unknown>(
+            `/api/delivery/${id}/cancel`,
+            { method: "PUT" },
+            token
+        );
+    },
+
     // ── History ────────────────────────────────────────────
     // GET /api/volunteers/history
     getDeliveryHistory: async (token: string): Promise<ActivityItem[]> => {

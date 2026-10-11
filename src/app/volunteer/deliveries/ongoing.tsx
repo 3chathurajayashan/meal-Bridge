@@ -2,7 +2,7 @@
  * Ongoing Delivery Screen — Light UI
  *
  * Active delivery tracking interface:
- *   - Map placeholder with animated route
+ *   - Real Map with OpenStreetMap & OSRM road routing
  *   - Bottom sheet: trip info, progress stepper, morphing CTA button
  *   - Report Issue modal
  *   - Completion success modal → navigates to /volunteer (Dashboard)
@@ -29,35 +29,106 @@ import { useAuth } from "../../../context/AuthContext";
 import { volunteerApi } from "../../../services/api";
 import type { Delivery } from "../../../types/volunteer";
 
+let MapView: any = null;
+let Marker: any = null;
+let Polyline: any = null;
+let UrlTile: any = null;
+let PROVIDER_DEFAULT: any = null;
+
+if (Platform.OS !== "web") {
+    try {
+        const Maps = require("react-native-maps");
+        MapView = Maps.default ?? Maps;
+        Marker = Maps.Marker;
+        Polyline = Maps.Polyline;
+        UrlTile = Maps.UrlTile;
+        PROVIDER_DEFAULT = Maps.PROVIDER_DEFAULT;
+    } catch {
+        // Native maps not available
+    }
+}
+
 const { height: SCREEN_H } = Dimensions.get("window");
 const SHEET_H = SCREEN_H * 0.52;
 
 // ─────────────────────────────────────────────────────────────
-// Map placeholder
+// Free OSRM driving route fetcher
+// ─────────────────────────────────────────────────────────────
+async function fetchDrivingRoute(
+    origin: { latitude: number; longitude: number },
+    destination: { latitude: number; longitude: number }
+) {
+    try {
+        const url = `https://router.project-osrm.org/route/v1/driving/${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}?overview=full&geometries=geojson`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.routes && data.routes.length > 0) {
+            return data.routes[0].geometry.coordinates.map(([lng, lat]: [number, number]) => ({
+                latitude: lat,
+                longitude: lng,
+            }));
+        }
+    } catch (err) {
+        console.error("Failed to fetch OSRM route:", err);
+    }
+    return [origin, destination]; // Fallback to straight line
+}
+
+function parseCoord(val: any, fallback: number): number {
+    if (typeof val === "number" && !isNaN(val)) return val;
+    if (typeof val === "string") {
+        const parsed = parseFloat(val);
+        if (!isNaN(parsed)) return parsed;
+    }
+    return fallback;
+}
+
+function extractCoords(addr: any, fallbackLat: number, fallbackLng: number) {
+    if (!addr) return { latitude: fallbackLat, longitude: fallbackLng };
+    if (Array.isArray(addr.coordinates) && addr.coordinates.length >= 2) {
+        return {
+            latitude: parseCoord(addr.coordinates[1], fallbackLat),
+            longitude: parseCoord(addr.coordinates[0], fallbackLng),
+        };
+    }
+    const lat = addr.coordinates?.latitude ?? addr.latitude ?? addr.lat;
+    const lng = addr.coordinates?.longitude ?? addr.longitude ?? addr.lng;
+    return {
+        latitude: parseCoord(lat, fallbackLat),
+        longitude: parseCoord(lng, fallbackLng),
+    };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Live Map Component
 // ─────────────────────────────────────────────────────────────
 const LiveMap: React.FC<{ delivery: Delivery; status: string }> = ({
     delivery,
     status,
 }) => {
-    const dotAnim  = useRef(new Animated.Value(0)).current;
-    const lineAnim = useRef(new Animated.Value(0)).current;
+    const isPickup = status === "ACCEPTED";
+
+    const pickupCoords = extractCoords(delivery.pickupAddress, 6.9271, 79.8612);
+    const dropoffCoords = extractCoords(delivery.dropOffAddress, 6.9344, 79.8510);
+
+    const driverCoords = isPickup
+        ? { latitude: pickupCoords.latitude - 0.002, longitude: pickupCoords.longitude - 0.002 }
+        : { latitude: dropoffCoords.latitude - 0.001, longitude: dropoffCoords.longitude - 0.001 };
+
+    const [routeCoords, setRouteCoords] = useState<Array<{ latitude: number; longitude: number }>>([]);
 
     useEffect(() => {
-        Animated.loop(
-            Animated.sequence([
-                Animated.timing(dotAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
-                Animated.timing(dotAnim, { toValue: 0, duration: 800, useNativeDriver: true }),
-            ])
-        ).start();
-
-        Animated.timing(lineAnim, { toValue: 1, duration: 1200, useNativeDriver: false }).start();
-    }, []);
-
-    const lineWidth = lineAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 180] });
-    const isPickup  = status === "ACCEPTED";
+        if (Platform.OS !== "web") {
+            fetchDrivingRoute(pickupCoords, dropoffCoords).then(setRouteCoords);
+        }
+    }, [delivery.id]);
 
     const openMaps = (addr: string) => {
-        const q   = encodeURIComponent(addr);
+        const q = encodeURIComponent(addr);
+        if (Platform.OS === "web") {
+            window.open(`https://www.google.com/maps/search/?api=1&query=${q}`, "_blank");
+            return;
+        }
         const url = Platform.OS === "ios" ? `maps://?daddr=${q}` : `geo:0,0?q=${q}`;
         Linking.openURL(url).catch(() =>
             Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${q}`)
@@ -68,46 +139,195 @@ const LiveMap: React.FC<{ delivery: Delivery; status: string }> = ({
         ? (delivery.pickupAddress.fullAddress  ?? delivery.pickupAddress.street  ?? "")
         : (delivery.dropOffAddress.fullAddress ?? delivery.dropOffAddress.street ?? "");
 
+    // On Web view or when native MapView is not present: render interactive Leaflet map
+    if (Platform.OS === "web" || !MapView) {
+        const pLat = pickupCoords.latitude;
+        const pLng = pickupCoords.longitude;
+        const dLat = dropoffCoords.latitude;
+        const dLng = dropoffCoords.longitude;
+        const drLat = driverCoords.latitude;
+        const drLng = driverCoords.longitude;
+
+        const mapHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; width: 100%; height: 100%;
+      background: #EAF0F8; overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    #map { width: 100%; height: 100%; position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
+    .custom-marker {
+      display: flex; align-items: center; justify-content: center;
+      width: 32px; height: 32px; border-radius: 50%;
+      color: #FFFFFF; font-weight: 800; font-size: 14px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.28);
+      border: 2.5px solid #FFFFFF; cursor: pointer;
+    }
+    .marker-pickup { background: #FF6B00; }
+    .marker-dropoff { background: #34C759; }
+    .driver-pin {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: #FFFFFF; border: 2.5px solid #FF6B00;
+      box-shadow: 0 4px 12px rgba(255, 107, 0, 0.35);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; cursor: pointer; animation: pulse 2s infinite ease-in-out;
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 107, 0, 0.4); }
+      70% { transform: scale(1.08); box-shadow: 0 0 0 10px rgba(255, 107, 0, 0); }
+      100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 107, 0, 0); }
+    }
+    .leaflet-popup-content-wrapper { border-radius: 12px; padding: 4px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); font-size: 13px; font-weight: 600; }
+    .leaflet-popup-content { margin: 8px 12px; line-height: 1.4; }
+    .popup-title { font-size: 13px; font-weight: 700; color: #1C1C1E; }
+    .popup-sub { font-size: 11px; font-weight: 500; color: #8E8E93; margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    (function() {
+      var pLat = ${pLat}, pLng = ${pLng};
+      var dLat = ${dLat}, dLng = ${dLng};
+      var drLat = ${drLat}, drLng = ${drLng};
+
+      var pickup = [pLat, pLng];
+      var dropoff = [dLat, dLng];
+      var driver = [drLat, drLng];
+
+      var centerLat = (pLat + dLat) / 2;
+      var centerLng = (pLng + dLng) / 2;
+
+      var map = L.map('map', { zoomControl: true, attributionControl: false }).setView([centerLat, centerLng], 14);
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+
+      var pickupIcon = L.divIcon({ className: '', html: '<div class=\"custom-marker marker-pickup\">P</div>', iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -18] });
+      var dropoffIcon = L.divIcon({ className: '', html: '<div class=\"custom-marker marker-dropoff\">D</div>', iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -18] });
+      var driverIcon = L.divIcon({ className: '', html: '<div class=\"driver-pin\">🚗</div>', iconSize: [36, 36], iconAnchor: [18, 18], popupAnchor: [0, -20] });
+
+      L.marker(pickup, { icon: pickupIcon }).addTo(map).bindPopup('<div class=\"popup-title\">📍 Pickup Location</div><div class=\"popup-sub\">${isPickup ? "Next Stop" : "Completed"}</div>');
+      L.marker(dropoff, { icon: dropoffIcon }).addTo(map).bindPopup('<div class=\"popup-title\">🎯 Drop-off Location</div><div class=\"popup-sub\">${!isPickup ? "Next Stop" : "Final Destination"}</div>');
+      L.marker(driver, { icon: driverIcon }).addTo(map).bindPopup('<div class=\"popup-title\">🚗 Volunteer Driver</div><div class=\"popup-sub\">${isPickup ? "Heading to pickup" : "En route to drop-off"}</div>');
+
+      var bounds = L.latLngBounds([pickup, dropoff, driver]);
+      map.fitBounds(bounds, { paddingTopLeft: [40, 50], paddingBottomRight: [40, 240], maxZoom: 16 });
+
+      var osrmUrl = 'https://router.project-osrm.org/route/v1/driving/' + pLng + ',' + pLat + ';' + dLng + ',' + dLat + '?overview=full&geometries=geojson';
+      fetch(osrmUrl)
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          if (data && data.routes && data.routes.length > 0) {
+            var coords = data.routes[0].geometry.coordinates.map(function(c) { return [c[1], c[0]]; });
+            L.polyline(coords, { color: 'rgba(255, 107, 0, 0.25)', weight: 8, lineCap: 'round', lineJoin: 'round' }).addTo(map);
+            var routeLine = L.polyline(coords, { color: '#FF6B00', weight: 5, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }).addTo(map);
+            map.fitBounds(routeLine.getBounds(), { paddingTopLeft: [40, 50], paddingBottomRight: [40, 240], maxZoom: 16 });
+          } else {
+            L.polyline([pickup, dropoff], { color: '#FF6B00', weight: 4, dashArray: '8, 8', opacity: 0.8 }).addTo(map);
+          }
+        })
+        .catch(function() {
+          L.polyline([pickup, dropoff], { color: '#FF6B00', weight: 4, dashArray: '8, 8', opacity: 0.8 }).addTo(map);
+        });
+    })();
+  </script>
+</body>
+</html>`;
+
+        return (
+            <View style={mapS.container}>
+                {React.createElement("iframe", {
+                    srcDoc: mapHtml,
+                    style: {
+                        width: "100%",
+                        height: "100%",
+                        border: "none",
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: "#EAF0F8",
+                    },
+                    title: "Live Delivery Route Map",
+                })}
+
+                <View style={mapS.statusChip}>
+                    <View style={mapS.statusChipDot} />
+                    <Text style={mapS.statusChipText}>
+                        {status === "ACCEPTED"   ? "Heading to Pickup"    :
+                         status === "PICKED_UP"  ? "Food Collected"       :
+                         status === "IN_TRANSIT" ? "En Route to Drop-off" : ""}
+                    </Text>
+                </View>
+
+                <TouchableOpacity
+                    style={mapS.navBtn}
+                    onPress={() => openMaps(targetAddr)}
+                    activeOpacity={0.85}
+                >
+                    <Ionicons name="navigate-outline" size={14} color="#FFF" />
+                    <Text style={mapS.navBtnText}>Navigate</Text>
+                </TouchableOpacity>
+            </View>
+        );
+    }
+
     return (
         <View style={mapS.container}>
-            {/* Grid lines */}
-            {Array.from({ length: 10 }).map((_, i) => (
-                <View key={`h${i}`} style={[mapS.gridH, { top: `${i * 11}%` as any }]} />
-            ))}
-            {Array.from({ length: 7 }).map((_, i) => (
-                <View key={`v${i}`} style={[mapS.gridV, { left: `${i * 17}%` as any }]} />
-            ))}
-
-            {/* Animated route line */}
-            <Animated.View style={[mapS.routeLine, { width: lineWidth }]} />
-
-            {/* Pickup pin */}
-            <View style={[mapS.pin, mapS.pinPickup]}>
-                <Text style={mapS.pinLabel}>P</Text>
-            </View>
-            <Text style={[mapS.pinText, { top: "28%", left: "16%" }]}>Pickup</Text>
-
-            {/* Drop-off pin */}
-            <View style={[mapS.pin, mapS.pinDropoff]}>
-                <Text style={mapS.pinLabel}>D</Text>
-            </View>
-            <Text style={[mapS.pinText, { bottom: "22%", right: "10%" }]}>Drop-off</Text>
-
-            {/* Volunteer dot */}
-            <Animated.View
-                style={[
-                    mapS.volunteerDot,
-                    isPickup ? mapS.volunteerNearPickup : mapS.volunteerNearDropoff,
-                    {
-                        opacity: dotAnim.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [0.7, 1],
-                        }),
-                    },
-                ]}
+            <MapView
+                provider={PROVIDER_DEFAULT}
+                style={StyleSheet.absoluteFill}
+                initialRegion={{
+                    latitude: (pickupCoords.latitude + dropoffCoords.latitude) / 2,
+                    longitude: (pickupCoords.longitude + dropoffCoords.longitude) / 2,
+                    latitudeDelta: 0.04,
+                    longitudeDelta: 0.04,
+                }}
             >
-                <Ionicons name="car" size={16} color="#FF6B00" />
-            </Animated.View>
+                {/* Free OpenStreetMap Tiles */}
+                <UrlTile
+                    urlTemplate="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    maximumZ={19}
+                />
+
+                {/* On-the-road Polyline Route */}
+                {routeCoords.length > 0 && (
+                    <Polyline
+                        coordinates={routeCoords}
+                        strokeColor="#FF6B00"
+                        strokeWidth={4}
+                    />
+                )}
+
+                {/* Pickup Pin */}
+                <Marker coordinate={pickupCoords} title="Pickup Location">
+                    <View style={[mapS.markerBubble, { backgroundColor: "#FF6B00" }]}>
+                        <Text style={mapS.markerText}>P</Text>
+                    </View>
+                </Marker>
+
+                {/* Drop-off Pin */}
+                <Marker coordinate={dropoffCoords} title="Drop-off Location">
+                    <View style={[mapS.markerBubble, { backgroundColor: "#34C759" }]}>
+                        <Text style={mapS.markerText}>D</Text>
+                    </View>
+                </Marker>
+
+                {/* Driver Pin */}
+                <Marker coordinate={driverCoords} title="Volunteer En Route">
+                    <View style={mapS.driverBubble}>
+                        <Ionicons name="car" size={18} color="#FF6B00" />
+                    </View>
+                </Marker>
+            </MapView>
 
             {/* Status chip */}
             <View style={mapS.statusChip}>
@@ -134,47 +354,20 @@ const LiveMap: React.FC<{ delivery: Delivery; status: string }> = ({
 
 const mapS = StyleSheet.create({
     container: {
-        flex: 1, backgroundColor: "#EAF0F8",
-        position: "relative", overflow: "hidden",
+        flex: 1, position: "relative", overflow: "hidden",
     },
-    gridH: {
-        position: "absolute", left: 0, right: 0,
-        height: StyleSheet.hairlineWidth, backgroundColor: "#D4DDE8",
-    },
-    gridV: {
-        position: "absolute", top: 0, bottom: 0,
-        width: StyleSheet.hairlineWidth, backgroundColor: "#D4DDE8",
-    },
-    routeLine: {
-        position: "absolute", top: "42%", left: "18%",
-        height: 3, borderRadius: 2,
-        backgroundColor: "#FF6B00", opacity: 0.8,
-        transform: [{ rotate: "18deg" }],
-    },
-    pin: {
-        position: "absolute",
+    markerBubble: {
         width: 32, height: 32, borderRadius: 16,
         alignItems: "center", justifyContent: "center",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3, shadowRadius: 6, elevation: 4,
+        shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25, shadowRadius: 4, elevation: 4,
     },
-    pinPickup:  { top: "25%", left: "14%", backgroundColor: "#FF6B00", shadowColor: "#FF6B00" },
-    pinDropoff: { bottom: "26%", right: "12%", backgroundColor: "#34C759", shadowColor: "#34C759" },
-    pinLabel:   { color: "#FFF", fontSize: 13, fontWeight: "800" },
-    pinText: {
-        position: "absolute", fontSize: 10, fontWeight: "700", color: "#3C3C43",
-        backgroundColor: "rgba(255,255,255,0.85)",
-        paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
+    markerText: { color: "#FFF", fontWeight: "800", fontSize: 14 },
+    driverBubble: {
+        width: 36, height: 36, borderRadius: 18,
+        backgroundColor: "#FFF", borderWidth: 2, borderColor: "#FF6B00",
+        alignItems: "center", justifyContent: "center", elevation: 5,
     },
-    volunteerDot: {
-        position: "absolute",
-        width: 38, height: 38, borderRadius: 19,
-        backgroundColor: "rgba(255,107,0,0.15)",
-        borderWidth: 2, borderColor: "#FF6B00",
-        alignItems: "center", justifyContent: "center",
-    },
-    volunteerNearPickup:  { top: "35%", left: "28%" },
-    volunteerNearDropoff: { top: "40%", left: "50%" },
     statusChip: {
         position: "absolute", top: 14, left: 14,
         flexDirection: "row", alignItems: "center",
@@ -258,7 +451,6 @@ export default function OngoingDelivery() {
         try {
             await volunteerApi.cancelDelivery(delivery.id, accessToken);
             setShowReport(false);
-            // Delivery released — go back to dashboard
             router.replace("/volunteer");
         } catch (e) {
             setError(e instanceof Error ? e.message : "Failed to cancel delivery.");
@@ -268,8 +460,6 @@ export default function OngoingDelivery() {
         }
     };
 
-    // Re-fetch every time this tab comes into focus — this ensures
-    // live updates after accepting a delivery or returning from another tab.
     useFocusEffect(
         useCallback(() => {
             fetchActive();
@@ -295,7 +485,6 @@ export default function OngoingDelivery() {
                         toValue: 1, useNativeDriver: true,
                         tension: 80, friction: 8,
                     }).start();
-                    // Navigate to Dashboard after 2.5s
                     setTimeout(() => {
                         setShowComplete(false);
                         router.replace("/volunteer");
@@ -310,7 +499,6 @@ export default function OngoingDelivery() {
         }
     };
 
-    // ── Loading ────────────────────────────────────────────────
     if (loading) {
         return (
             <SafeAreaView style={s.safeArea}>
@@ -322,7 +510,6 @@ export default function OngoingDelivery() {
         );
     }
 
-    // ── No active delivery ─────────────────────────────────────
     if (!delivery) {
         return (
             <SafeAreaView style={s.safeArea}>
@@ -348,13 +535,12 @@ export default function OngoingDelivery() {
     const pickup  = delivery.pickupAddress;
     const dropoff = delivery.dropOffAddress;
 
-    // Donor name — comes from delivery.donor.name (populated by adapter)
     const donorName     = delivery.donor?.name     || "—";
     const recipientName = delivery.recipient?.name || "—";
 
     return (
         <SafeAreaView style={s.safeArea}>
-            {/* ── Map (fills space above sheet) ───────── */}
+            {/* ── Map ───────── */}
             <View style={s.mapContainer}>
                 <LiveMap delivery={delivery} status={delivery.status} />
             </View>
@@ -438,7 +624,7 @@ export default function OngoingDelivery() {
                         </View>
                     </View>
 
-                    {/* Contact cards — donor name fixed via adapter */}
+                    {/* Contact cards */}
                     <View style={s.contactRow}>
                         <View style={s.contactCard}>
                             <Text style={s.contactRole}>DONOR</Text>
@@ -449,8 +635,10 @@ export default function OngoingDelivery() {
                                     onPress={() =>
                                         Linking.openURL(`tel:${delivery.donor.phone}`)
                                     }
+                                    activeOpacity={0.7}
                                 >
-                                    <Text style={s.callBtnText}>📞 Call</Text>
+                                    <Ionicons name="call" size={13} color="#FF6B00" />
+                                    <Text style={s.callBtnText}>Call</Text>
                                 </TouchableOpacity>
                             ) : null}
                         </View>
@@ -464,8 +652,10 @@ export default function OngoingDelivery() {
                                     onPress={() =>
                                         Linking.openURL(`tel:${delivery.recipient.phone}`)
                                     }
+                                    activeOpacity={0.7}
                                 >
-                                    <Text style={s.callBtnText}>📞 Call</Text>
+                                    <Ionicons name="call" size={13} color="#FF6B00" />
+                                    <Text style={s.callBtnText}>Call</Text>
                                 </TouchableOpacity>
                             ) : null}
                         </View>
@@ -681,7 +871,6 @@ const s = StyleSheet.create({
         shadowColor: "#FF6B00", shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.5, shadowRadius: 6, elevation: 4,
     },
-    progressCheck: { color: "#FFF", fontSize: 11, fontWeight: "800" },
     progressLine: {
         flex: 1, height: 2, borderRadius: 1,
         backgroundColor: "#E5E5EA", marginHorizontal: 4,
@@ -728,8 +917,9 @@ const s = StyleSheet.create({
     contactName:  { fontSize: 13, fontWeight: "600", color: "#1C1C1E", marginBottom: 8 },
     callBtn: {
         backgroundColor: "#FFF3E8", borderRadius: 8,
-        paddingVertical: 5, alignItems: "center",
-        borderWidth: 1, borderColor: "#FFD5A8",
+        paddingVertical: 6, paddingHorizontal: 10,
+        flexDirection: "row", alignItems: "center", justifyContent: "center",
+        borderWidth: 1, borderColor: "#FFD5A8", gap: 6,
     },
     callBtnText: { fontSize: 12, fontWeight: "600", color: "#FF6B00" },
 
@@ -761,6 +951,7 @@ const s = StyleSheet.create({
         borderRadius: 12, borderWidth: 1,
         borderColor: "rgba(255,59,48,0.3)",
         backgroundColor: "#FFF0EF",
+        flexDirection: "row", justifyContent: "center",
     },
     reportBtnText: { fontSize: 14, fontWeight: "600", color: "#FF3B30" },
 
@@ -804,7 +995,6 @@ const s = StyleSheet.create({
         shadowColor: "#34C759", shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3, shadowRadius: 10, elevation: 6,
     },
-    completeIconText:  { color: "#FFF", fontSize: 34, fontWeight: "800" },
     completeTitle:     { fontSize: 24, fontWeight: "800", color: "#1C1C1E", marginBottom: 10, letterSpacing: -0.5 },
     completeSubtitle:  { fontSize: 14, color: "#8E8E93", textAlign: "center", lineHeight: 20, marginBottom: 20 },
     completeStats: {

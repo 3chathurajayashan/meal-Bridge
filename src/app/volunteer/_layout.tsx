@@ -40,6 +40,7 @@ export default function VolunteerLayout() {
         headerShown: false,
         tabBarStyle: styles.tabBar,
         tabBarShowLabel: false,
+        tabBarLabelStyle: styles.tabBarLabel,
         tabBarItemStyle: {
           justifyContent: "center",
           alignItems: "center",
@@ -107,6 +108,7 @@ export default function VolunteerLayout() {
         name="deliveries/[id]"
         options={{
           href: null,
+          tabBarItemStyle: { display: "none" },
         }}
       />
     </Tabs>
@@ -134,6 +136,10 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 12,
     minWidth: 64,
+  },
+  tabBarLabel: {
+    fontSize: 10,
+    fontWeight: "600",
   },
   tabItemFocused: {
     backgroundColor: "rgba(255,107,0,0.10)",
