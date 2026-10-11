@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useRouter } from "expo-router";
 import {
     View,
     Text,
@@ -7,7 +8,6 @@ import {
     SafeAreaView,
     Dimensions,
 } from "react-native";
-import { useRouter } from "expo-router";
 import Animated, {
     FadeInDown,
     useAnimatedStyle,
@@ -107,7 +107,11 @@ const RoleSelectionScreen = () => {
 
     const handleContinue = () => {
         if (!selectedRole) return;
-        router.replace('/main' as any);
+        if (selectedRole === "RECIPIENT") {
+            router.replace("/food-recipient");
+            return;
+        }
+        router.replace("/main" as any);
     };
 
     return (

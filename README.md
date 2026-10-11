@@ -16,6 +16,16 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npx expo start
    ```
 
+## Food recipient UI preview
+
+The recipient screens are available from the `I need Food` role selection or directly at `/food-recipient`.
+The preview includes a dashboard, donation browsing with search and category/expiry filters, donation details,
+a request form (`/recipient/request/<id>`), request history (`/recipient/requests`), notifications
+(`/recipient/notifications`), and an editable profile (`/recipient/profile`). Browse donations at
+`/recipient/browse`; opening a donation shows `/recipient/donation/<id>`. The screens use local sample content;
+request submissions and notification read states are held only in app memory and are not sent to a backend or
+persisted after the app restarts.
+
 In the output, you'll find options to open the app in a
 
 - [development build](https://docs.expo.dev/develop/development-builds/introduction/)
