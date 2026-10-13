@@ -1,8 +1,27 @@
-// ============================================================
-// Centralized API client
-// ============================================================
+import Constants from "expo-constants";
+import { Platform } from "react-native";
 
-const BASE_URL = "http://localhost:5002";
+const getBaseUrl = (): string => {
+    if (Platform.OS === "web") {
+        return "http://localhost:5002";
+    }
+
+    const hostUri =
+        Constants.expoConfig?.hostUri ??
+        (Constants as any).manifest?.debuggerHost ??
+        (Constants as any).manifest2?.extra?.expoGo?.debuggerHost;
+
+    if (hostUri) {
+        const ip = hostUri.split(":")[0];
+        if (ip) {
+            return `http://${ip}:5002`;
+        }
+    }
+
+    return "http://192.168.1.3:5002";
+};
+
+export const BASE_URL = getBaseUrl();
 
 // ============================================================
 // Core fetch wrapper

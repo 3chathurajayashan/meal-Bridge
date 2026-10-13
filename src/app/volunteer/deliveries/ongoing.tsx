@@ -264,7 +264,8 @@ const LiveMap: React.FC<{ delivery: Delivery; status: string }> = ({
                     <Text style={mapS.statusChipText}>
                         {status === "ACCEPTED"   ? "Heading to Pickup"    :
                          status === "PICKED_UP"  ? "Food Collected"       :
-                         status === "IN_TRANSIT" ? "En Route to Drop-off" : ""}
+                         status === "IN_TRANSIT" ? "En Route to Drop-off" :
+                         status === "DELIVERED"  ? "Delivered" : ""}
                     </Text>
                 </View>
 
@@ -335,7 +336,8 @@ const LiveMap: React.FC<{ delivery: Delivery; status: string }> = ({
                 <Text style={mapS.statusChipText}>
                     {status === "ACCEPTED"   ? "Heading to Pickup"    :
                      status === "PICKED_UP"  ? "Food Collected"       :
-                     status === "IN_TRANSIT" ? "En Route to Drop-off" : ""}
+                     status === "IN_TRANSIT" ? "En Route to Drop-off" :
+                     status === "DELIVERED"  ? "Delivered" : ""}
                 </Text>
             </View>
 
@@ -579,17 +581,25 @@ export default function OngoingDelivery() {
                             const cur   = order.indexOf(delivery.status);
                             const done  = i < cur;
                             const active = i === cur;
+                            const isDelivered = step === "DELIVERED" && delivery.status === "DELIVERED";
+
                             return (
                                 <React.Fragment key={step}>
                                     <View style={[
                                         s.progressDot,
                                         done   && s.progressDotDone,
                                         active && s.progressDotActive,
+                                        isDelivered && s.progressDotDelivered,
                                     ]}>
-                                        {done && <Ionicons name="checkmark" size={12} color="#FFF" />}
+                                        {(done || isDelivered) && (
+                                            <Ionicons name="checkmark" size={12} color="#FFF" />
+                                        )}
                                     </View>
                                     {i < 3 && (
-                                        <View style={[s.progressLine, done && s.progressLineDone]} />
+                                        <View style={[
+                                            s.progressLine,
+                                            (done || cur > i) && s.progressLineDone,
+                                        ]} />
                                     )}
                                 </React.Fragment>
                             );
@@ -869,6 +879,11 @@ const s = StyleSheet.create({
     progressDotActive: {
         backgroundColor: "#FF6B00",
         shadowColor: "#FF6B00", shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.5, shadowRadius: 6, elevation: 4,
+    },
+    progressDotDelivered: {
+        backgroundColor: "#34C759",
+        shadowColor: "#34C759", shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.5, shadowRadius: 6, elevation: 4,
     },
     progressLine: {

@@ -14,6 +14,7 @@ import {
     View,
 } from "react-native";
 import { useAuth } from "../../context/AuthContext";
+import { BASE_URL } from "../../services/api";
 
 import ErrorMessage from "../../toasts/ErrorMessage";
 import SuccessMessage from "../../toasts/SuccessMessage";
@@ -66,7 +67,7 @@ const SignIn = () => {
 
         try {
             const response = await fetch(
-                "http://localhost:5002/api/auth/login",
+                `${BASE_URL}/api/auth/login`,
                 {
                     method: "POST",
 
@@ -114,23 +115,24 @@ const SignIn = () => {
                 data.user
             );
 
-            // Store user + access token
-            await login(
-                data.user,
-                data.accessToken
-            );
-
             // ==============================
             // Check User Role
             // ==============================
 
-            const role = data.user?.role;
+            const rawRole = data.user?.role;
+            const role = rawRole ? String(rawRole).trim().toUpperCase() : "";
 
-            if (role !== "ADMIN" && role !== "VOLUNTEER") {
+            if (!["ADMIN", "VOLUNTEER", "DONOR", "RECIPIENT"].includes(role)) {
                 throw new Error(
                     "You are not authorized to access this app."
                 );
             }
+
+            // Store user + access token after role check
+            await login(
+                data.user,
+                data.accessToken
+            );
 
             // ==============================
             // Show Success Toast
@@ -147,10 +149,10 @@ const SignIn = () => {
             // ==============================
 
             setTimeout(() => {
-                if (role === "VOLUNTEER") {
-                    router.replace("/volunteer");
-                } else {
+                if (role === "ADMIN" || role === "DONOR" || role === "RECIPIENT") {
                     router.replace("/dashboards/adminDashboard");
+                } else {
+                    router.replace("/volunteer");
                 }
             }, 1200);
 
