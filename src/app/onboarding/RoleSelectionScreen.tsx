@@ -8,12 +8,14 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import { useRouter } from "expo-router";
 import Animated, {
     FadeInDown,
     useAnimatedStyle,
     useSharedValue,
     withSpring,
 } from "react-native-reanimated";
+import { getStoredUser, setStoredUser } from "../../services/api";
 
 type UserRole = "DONOR" | "RECIPIENT" | "VOLUNTEER";
 
@@ -91,6 +93,8 @@ const RoleCard = ({
 const RoleSelectionScreen = () => {
     const [selectedRole, setSelectedRole] =
         useState<UserRole | null>(null);
+    const router = useRouter();
+    const [selectedRole, setSelectedRole] = useState<UserRole | null>("DONOR");
 
     const roles = [
         {
@@ -113,7 +117,7 @@ const RoleSelectionScreen = () => {
         },
     ];
 
-    const handleContinue = () => {
+    const handleContinue = async () => {
         if (!selectedRole) return;
 
         console.log("Selected role:", selectedRole);
@@ -127,6 +131,17 @@ const RoleSelectionScreen = () => {
         ) {
             router.push("/auth/signIn");
         }
+        try {
+            const stored = await getStoredUser();
+            await setStoredUser({
+                ...stored,
+                role: selectedRole,
+            });
+        } catch (e) {
+            console.warn("Could not save selected role:", e);
+        }
+
+        router.replace('/(donor)');
     };
 
     return (
