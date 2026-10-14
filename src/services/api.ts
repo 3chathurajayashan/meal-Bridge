@@ -547,6 +547,67 @@ export const createDonation = async (data: CreateDonationPayload): Promise<Donat
   return transformBackendDonation(resData.donation);
 };
 
+export interface UpdateDonationPayload {
+  title?: string;
+  category?: string;
+  quantity?: string | number;
+  quantityUnit?: string;
+  instructions?: string;
+  pickupAddress?: string;
+  availableUntil?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+/**
+ * Update an existing food donation
+ * Backend: PUT /api/donations/:id
+ */
+export const updateDonation = async (
+  id: string,
+  data: UpdateDonationPayload
+): Promise<Donation> => {
+  const baseUrl = await getEffectiveBaseUrl();
+  const token = await getAuthToken();
+
+  const body: Record<string, any> = {};
+  if (data.title !== undefined) body.foodName = data.title;
+  if (data.instructions !== undefined) body.description = data.instructions;
+  if (data.category !== undefined) {
+    body.category = CATEGORY_MAP_TO_BACKEND[data.category] || data.category;
+  }
+  if (data.quantity !== undefined) {
+    const parsedQty = typeof data.quantity === 'number' ? data.quantity : parseFloat(String(data.quantity));
+    if (!isNaN(parsedQty)) body.quantity = parsedQty;
+  }
+  if (data.quantityUnit !== undefined) {
+    const upper = data.quantityUnit.toUpperCase();
+    if (['PORTIONS', 'KG', 'LITERS', 'PACKETS', 'ITEMS'].includes(upper)) {
+      body.quantityUnit = upper;
+    }
+  }
+  if (data.pickupAddress !== undefined) body.pickupAddress = data.pickupAddress;
+  if (data.availableUntil !== undefined) body.availableUntil = data.availableUntil;
+  if (data.latitude !== undefined) body.latitude = data.latitude;
+  if (data.longitude !== undefined) body.longitude = data.longitude;
+
+  const response = await fetch(`${baseUrl}/donations/${id}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const resData = await response.json().catch(() => ({}));
+  if (!response.ok || !resData.success) {
+    throw new Error(resData.message || 'Failed to update donation');
+  }
+
+  return transformBackendDonation(resData.donation);
+};
+
 /**
  * Cancel an active food donation
  * Backend: PUT /api/donations/:id/cancel
