@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import img1 from '../../assets/s1.png'; // Adjust path if needed for your third image asset
+import img1 from '../../../assets/images/icon.png';
 import {
   View,
   Text,
