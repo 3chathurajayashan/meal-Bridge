@@ -1,10 +1,12 @@
 import React, { useEffect, useRef } from 'react';
+import img1 from '../../assets/f14.jpg';
 import {
   View,
   Text,
   StyleSheet,
   Pressable,
   Animated,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 
@@ -52,14 +54,6 @@ export default function OnboardingSecond() {
 
   return (
     <View style={styles.container}>
-      <Pressable
-        style={styles.backButton}
-        hitSlop={12}
-        onPress={() => router.back()}
-      >
-        <View style={styles.backArrow} />
-      </Pressable>
-
       <Animated.View
         style={[
           styles.content,
@@ -69,22 +63,18 @@ export default function OnboardingSecond() {
           },
         ]}
       >
-        <View style={styles.markWrap}>
-          <View style={styles.markOuter}>
-            <View style={styles.markRing} />
-            <View style={styles.markCore} />
-          </View>
-          <View style={styles.markAccentOne} />
-          <View style={styles.markAccentTwo} />
-          <View style={styles.markAccentThree} />
+        {/* Full width & expanded height image */}
+        <View style={styles.imageWrap}>
+          <Image source={img1} style={styles.image} resizeMode="cover" />
         </View>
 
-        <Text style={styles.title}>Fast, Reliable Delivery</Text>
-
-        <Text style={styles.description}>
-          Track your order in real time and get{'\n'}
-          it delivered right to your door.
-        </Text>
+        <View style={styles.textContainer}>
+          <Text style={styles.title}>Fast, Reliable Delivery</Text>
+          <Text style={styles.description}>
+            Track your order in real time and get{'\n'}
+            it delivered right to your door.
+          </Text>
+        </View>
       </Animated.View>
 
       <View style={styles.bottom}>
@@ -95,6 +85,7 @@ export default function OnboardingSecond() {
         </View>
 
         <Pressable
+          style={styles.pressable}
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
           onPress={() => router.push('/onboarding/third')}
@@ -117,99 +108,33 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 28,
     justifyContent: 'space-between',
-  },
-
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F5F5F7',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 12,
-  },
-
-  backArrow: {
-    width: 9,
-    height: 9,
-    borderLeftWidth: 2,
-    borderBottomWidth: 2,
-    borderColor: '#1C1C1E',
-    transform: [{ rotate: '45deg' }],
-    marginLeft: 3,
   },
 
   content: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 20,
-  },
-
-  markWrap: {
-    width: 220,
-    height: 220,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 56,
-  },
-
-  markOuter: {
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: '#FFF5EC',
-    justifyContent: 'center',
+    justifyContent: 'flex-start', // Align to top so the image starts from the very top edge
     alignItems: 'center',
   },
 
-  markRing: {
-    position: 'absolute',
-    width: 128,
-    height: 128,
-    borderRadius: 64,
-    borderWidth: 10,
-    borderColor: '#FFE3CC',
+  imageWrap: {
+    width: '100%',
+    flex: 1, // Takes up all available vertical space inside the content container
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
   },
 
-  markCore: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
-    backgroundColor: '#FF6B00',
+  image: {
+    width: '100%',
+    height: '100%',
   },
 
-  markAccentOne: {
-    position: 'absolute',
-    top: 24,
-    left: 30,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#FFB88A',
-  },
-
-  markAccentTwo: {
-    position: 'absolute',
-    bottom: 30,
-    right: 24,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: '#FF6B00',
-    opacity: 0.9,
-  },
-
-  markAccentThree: {
-    position: 'absolute',
-    top: 40,
-    right: 12,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FFCBA1',
+  textContainer: {
+    paddingHorizontal: 28,
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 20,
   },
 
   title: {
@@ -232,6 +157,7 @@ const styles = StyleSheet.create({
 
   bottom: {
     paddingBottom: 50,
+    paddingHorizontal: 28,
     alignItems: 'center',
     width: '100%',
   },
@@ -254,6 +180,10 @@ const styles = StyleSheet.create({
     width: 22,
     borderRadius: 3,
     backgroundColor: '#FF6B00',
+  },
+
+  pressable: {
+    width: '100%',
   },
 
   button: {
