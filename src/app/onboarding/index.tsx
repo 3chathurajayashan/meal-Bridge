@@ -1,10 +1,12 @@
 import React, { useEffect, useRef } from 'react';
+import img1 from '../../assets/f20.jpg';
 import {
   View,
   Text,
   StyleSheet,
   Pressable,
   Animated,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 
@@ -59,22 +61,18 @@ export default function OnboardingFirst() {
           },
         ]}
       >
-        <View style={styles.markWrap}>
-          <View style={styles.markOuter}>
-            <View style={styles.markMid}>
-              <View style={styles.markInner} />
-            </View>
-          </View>
-          <View style={styles.markAccentOne} />
-          <View style={styles.markAccentTwo} />
+        {/* Full-width and upper height edge-to-edge image */}
+        <View style={styles.imageWrap}>
+          <Image source={img1} style={styles.image} resizeMode="cover" />
         </View>
 
-        <Text style={styles.title}>Discover Great Food</Text>
-
-        <Text style={styles.description}>
-          Explore delicious food from local shops{'\n'}
-          and discover something you'll love.
-        </Text>
+        <View style={styles.textContainer}>
+          <Text style={styles.title}>Discover Great Food</Text>
+          <Text style={styles.description}>
+            Explore delicious food from local shops{'\n'}
+            and discover something you'll love.
+          </Text>
+        </View>
       </Animated.View>
 
       <View style={styles.bottom}>
@@ -85,6 +83,7 @@ export default function OnboardingFirst() {
         </View>
 
         <Pressable
+          style={styles.pressable}
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
           onPress={() => router.push('/onboarding/second')}
@@ -107,70 +106,34 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 28,
     justifyContent: 'space-between',
+    // Removed paddingHorizontal here so the image goes edge-to-edge
   },
 
   content: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 60,
-  },
-
-  markWrap: {
-    width: 220,
-    height: 220,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 56,
-  },
-
-  markOuter: {
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: '#FFF5EC',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     alignItems: 'center',
   },
 
-  markMid: {
-    width: 132,
-    height: 132,
-    borderRadius: 66,
-    backgroundColor: '#FFE3CC',
+  imageWrap: {
+    width: '100%',
+    flex: 1, // Expands to take up maximum upper height dynamically
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 24,
   },
 
-  markInner: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    backgroundColor: '#FF6B00',
-    transform: [{ rotate: '45deg' }],
+  image: {
+    width: '100%',
+    height: '100%',
   },
 
-  markAccentOne: {
-    position: 'absolute',
-    top: 18,
-    right: 22,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#FF6B00',
-    opacity: 0.9,
-  },
-
-  markAccentTwo: {
-    position: 'absolute',
-    bottom: 26,
-    left: 14,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#FFB88A',
+  textContainer: {
+    paddingHorizontal: 28, // Re-applied padding specifically for text
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 20,
   },
 
   title: {
@@ -193,6 +156,7 @@ const styles = StyleSheet.create({
 
   bottom: {
     paddingBottom: 50,
+    paddingHorizontal: 28, // Re-applied padding for the button & dots
     alignItems: 'center',
     width: '100%',
   },
@@ -215,6 +179,10 @@ const styles = StyleSheet.create({
     width: 22,
     borderRadius: 3,
     backgroundColor: '#FF6B00',
+  },
+
+  pressable: {
+    width: '100%',
   },
 
   button: {
