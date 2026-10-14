@@ -204,7 +204,7 @@ export const EditDonationModal: React.FC<EditDonationModalProps> = ({
                 style={styles.locationInput}
                 value={pickupAddress}
                 onChangeText={setPickupAddress}
-                placeholder="Enter pickup address"
+                placeholder="e.g. Kottawa, Sri Lanka"
                 placeholderTextColor="#8E8E93"
               />
             </View>

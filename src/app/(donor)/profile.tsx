@@ -52,7 +52,7 @@ export default function DonorProfileScreen() {
     setUser(stored);
     setEditFullName(stored?.fullName || 'Thilakshi Weliwaththa');
     setEditPhone(stored?.phoneNumber || '+94 77 123 4567');
-    setEditAddress(stored?.address || 'Kurunegala, Sri Lanka');
+    setEditAddress(stored?.address || 'Kottawa, Sri Lanka');
 
     const url = await getEffectiveBaseUrl();
     setServerUrl(url);
@@ -120,7 +120,7 @@ export default function DonorProfileScreen() {
         }),
         fullName: editFullName.trim(),
         phoneNumber: editPhone.trim() || '+94 77 123 4567',
-        address: editAddress.trim() || 'Kurunegala, Sri Lanka',
+        address: editAddress.trim() || 'Kottawa, Sri Lanka',
       };
 
       await setStoredUser(updatedUser);
@@ -248,7 +248,7 @@ export default function DonorProfileScreen() {
             </View>
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Primary Pickup Location</Text>
-              <Text style={styles.detailValue}>{user?.address || 'Kurunegala, Sri Lanka'}</Text>
+              <Text style={styles.detailValue}>{user?.address || 'Kottawa, Sri Lanka'}</Text>
             </View>
           </View>
 
@@ -474,7 +474,7 @@ export default function DonorProfileScreen() {
                 style={[styles.modalInput, { minHeight: 70, textAlignVertical: 'top' }]}
                 value={editAddress}
                 onChangeText={setEditAddress}
-                placeholder="Kurunegala, Sri Lanka"
+                placeholder="Kottawa, Sri Lanka"
                 multiline
               />
 

@@ -227,8 +227,8 @@ const DEMO_DONOR_USER: User = {
   fullName: 'Thilakshi Weliwaththa',
   phoneNumber: '+94 77 123 4567',
   role: 'DONOR',
-  address: 'Kurunegala, Sri Lanka',
-  location: { latitude: 7.4863, longitude: 80.3623 },
+  address: 'Kottawa, Sri Lanka',
+  location: { latitude: 6.8412, longitude: 79.9654 },
 };
 
 // Demo JWT signed with the backend JWT_SECRET for donor
@@ -264,12 +264,23 @@ export const setAuthToken = async (token: string | null): Promise<void> => {
 };
 
 export const getStoredUser = async (): Promise<User> => {
-  if (memoryUser && memoryUser.fullName !== 'Malkini bandara') return memoryUser;
+  if (memoryUser && memoryUser.fullName !== 'Malkini bandara') {
+    if (memoryUser.address?.includes('Kurunegala')) {
+      memoryUser.address = 'Kottawa, Sri Lanka';
+      memoryUser.location = { latitude: 6.8412, longitude: 79.9654 };
+    }
+    return memoryUser;
+  }
   try {
     const saved = await AsyncStorage.getItem(USER_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
       if (parsed && parsed.fullName && parsed.fullName !== 'Malkini bandara') {
+        if (parsed.address?.includes('Kurunegala')) {
+          parsed.address = 'Kottawa, Sri Lanka';
+          parsed.location = { latitude: 6.8412, longitude: 79.9654 };
+          await AsyncStorage.setItem(USER_KEY, JSON.stringify(parsed));
+        }
         memoryUser = parsed;
         return memoryUser!;
       }

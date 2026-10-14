@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { getMyDonations, Donation, getStoredUser, User } from '../../services/api';
 import DonationQRModal from '../../components/DonationQRModal';
 import QRScannerModal from '../../components/QRScannerModal';
+import { EditDonationModal } from '../../components/EditDonationModal';
 
 export default function DonorDashboardScreen() {
   const router = useRouter();
@@ -16,6 +17,7 @@ export default function DonorDashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedQRDonation, setSelectedQRDonation] = useState<Donation | null>(null);
+  const [editingDonation, setEditingDonation] = useState<Donation | null>(null);
   const [scannerVisible, setScannerVisible] = useState(false);
 
   useEffect(() => {
@@ -185,15 +187,29 @@ export default function DonorDashboardScreen() {
                   <Text style={[styles.statusText, { color: statusConfig.color }]}>{statusConfig.text}</Text>
                 </View>
 
-                <TouchableOpacity
-                  style={styles.qrPassBtn}
-                  onPress={() => setSelectedQRDonation(item)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  activeOpacity={0.7}
-                >
-                  <SymbolView name="qrcode" tintColor="#FF6B00" size={17} fallback={null} />
-                  <Text style={styles.qrPassBtnText}>Pass</Text>
-                </TouchableOpacity>
+                <View style={styles.actionBtnsRow}>
+                  {item.rawStatus === 'AVAILABLE' && (
+                    <TouchableOpacity
+                      style={styles.quickEditBtn}
+                      onPress={() => setEditingDonation(item)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      activeOpacity={0.7}
+                    >
+                      <SymbolView name="pencil" tintColor="#FF6B00" size={13} fallback={null} />
+                      <Text style={styles.quickEditBtnText}>Edit</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  <TouchableOpacity
+                    style={styles.qrPassBtn}
+                    onPress={() => setSelectedQRDonation(item)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    activeOpacity={0.7}
+                  >
+                    <SymbolView name="qrcode" tintColor="#FF6B00" size={15} fallback={null} />
+                    <Text style={styles.qrPassBtnText}>Pass</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </TouchableOpacity>
           );
@@ -201,6 +217,16 @@ export default function DonorDashboardScreen() {
       )}
 
       <View style={{ height: 40 }} />
+
+      {/* Edit Donation Modal */}
+      <EditDonationModal
+        visible={!!editingDonation}
+        donation={editingDonation}
+        onClose={() => setEditingDonation(null)}
+        onUpdated={() => {
+          loadData();
+        }}
+      />
 
       {/* Donation Unique QR Code Pass Modal */}
       <DonationQRModal
@@ -436,6 +462,27 @@ const styles = StyleSheet.create({
   actionColumn: {
     alignItems: 'flex-end',
     gap: 8,
+  },
+  actionBtnsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  quickEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#F8F9FA',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  quickEditBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FF6B00',
   },
   qrPassBtn: {
     flexDirection: 'row',

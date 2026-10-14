@@ -25,6 +25,7 @@ import {
 } from '../../services/api';
 import DonationQRModal from '../../components/DonationQRModal';
 import QRScannerModal from '../../components/QRScannerModal';
+import { EditDonationModal } from '../../components/EditDonationModal';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -45,6 +46,7 @@ export default function ActiveDonationsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [selectedQRDonation, setSelectedQRDonation] = useState<Donation | null>(null);
+  const [editingDonation, setEditingDonation] = useState<Donation | null>(null);
   const [scannerVisible, setScannerVisible] = useState(false);
 
   useEffect(() => {
@@ -337,7 +339,7 @@ export default function ActiveDonationsScreen() {
                   <Text style={styles.trackerHeading}>Progress Timeline</Text>
                   {renderTimeline(donation.rawStatus)}
 
-                  {/* Action Buttons: View QR Pass & Cancel */}
+                  {/* Action Buttons: View QR Pass, Edit Listing & Cancel */}
                   <View style={styles.cardActionsContainer}>
                     <TouchableOpacity
                       style={styles.qrPassButton}
@@ -349,17 +351,28 @@ export default function ActiveDonationsScreen() {
                     </TouchableOpacity>
 
                     {donation.rawStatus === 'AVAILABLE' && (
-                      <TouchableOpacity
-                        style={styles.cancelButton}
-                        onPress={() => handleCancel(donation.id, donation.title)}
-                        disabled={actionLoadingId === donation.id}
-                      >
-                        {actionLoadingId === donation.id ? (
-                          <ActivityIndicator color="#FF3B30" />
-                        ) : (
-                          <Text style={styles.cancelButtonText}>Cancel Donation</Text>
-                        )}
-                      </TouchableOpacity>
+                      <View style={styles.secondaryActionsRow}>
+                        <TouchableOpacity
+                          style={styles.editButton}
+                          onPress={() => setEditingDonation(donation)}
+                          activeOpacity={0.8}
+                        >
+                          <SymbolView name="pencil" tintColor="#FF6B00" size={16} fallback={null} />
+                          <Text style={styles.editButtonText}>Edit Details</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.cancelButton}
+                          onPress={() => handleCancel(donation.id, donation.title)}
+                          disabled={actionLoadingId === donation.id}
+                        >
+                          {actionLoadingId === donation.id ? (
+                            <ActivityIndicator color="#FF3B30" />
+                          ) : (
+                            <Text style={styles.cancelButtonText}>Cancel</Text>
+                          )}
+                        </TouchableOpacity>
+                      </View>
                     )}
                   </View>
                 </View>
@@ -370,6 +383,16 @@ export default function ActiveDonationsScreen() {
       )}
 
       <View style={{ height: 40 }} />
+
+      {/* Edit Donation Modal */}
+      <EditDonationModal
+        visible={!!editingDonation}
+        donation={editingDonation}
+        onClose={() => setEditingDonation(null)}
+        onUpdated={() => {
+          fetchData();
+        }}
+      />
 
       {/* Donation Unique QR Code Pass Modal */}
       <DonationQRModal
@@ -729,9 +752,32 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 14,
   },
-  cancelButton: {
+  secondaryActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  editButton: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 13,
+    borderRadius: 12,
+    backgroundColor: '#FFF0E5',
+    borderWidth: 1,
+    borderColor: '#FFD7BD',
+  },
+  editButtonText: {
+    color: '#FF6B00',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  cancelButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 13,
     borderRadius: 12,
     backgroundColor: '#FFF5F5',
     borderWidth: 1,

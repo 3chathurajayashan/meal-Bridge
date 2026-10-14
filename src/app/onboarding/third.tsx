@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import img1 from '../../assets/s1.png'; // Adjust path if needed for your third image asset
+import img1 from '../../../assets/images/icon.png';
 import {
   View,
   Text,
@@ -131,7 +131,6 @@ export default function OnboardingThird() {
           style={styles.pressable}
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
-          onPress={() => router.push('/(donor)')}
           onPress={handleGetStarted}
           disabled={status !== 'idle'}
         >

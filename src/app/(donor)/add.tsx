@@ -62,7 +62,7 @@ export default function AddDonationScreen() {
     if (stored.address) {
       setPickupAddress(stored.address);
     } else {
-      setPickupAddress('Colombo, Sri Lanka');
+      setPickupAddress('Kottawa, Sri Lanka');
     }
   };
 
@@ -120,8 +120,8 @@ export default function AddDonationScreen() {
         availableUntil: expiryDate.toISOString(),
         instructions: instructions.trim(),
         pickupAddress: pickupAddress.trim(),
-        latitude: user?.location?.latitude || 6.9271,
-        longitude: user?.location?.longitude || 79.8612,
+        latitude: user?.location?.latitude || 6.8412,
+        longitude: user?.location?.longitude || 79.9654,
         imageUri: selectedImage || undefined,
       });
 
