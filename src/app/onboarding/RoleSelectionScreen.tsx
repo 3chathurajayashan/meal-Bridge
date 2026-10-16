@@ -8,6 +8,7 @@ import {
     SafeAreaView,
     Dimensions,
 } from "react-native";
+import { useRouter } from "expo-router";
 import Animated, {
     FadeInDown,
     useAnimatedStyle,
@@ -15,6 +16,7 @@ import Animated, {
     interpolateColor,
     useSharedValue,
 } from "react-native-reanimated";
+import { getStoredUser, setStoredUser } from "../../services/api";
 
 type UserRole = "DONOR" | "RECIPIENT" | "VOLUNTEER";
 
@@ -86,6 +88,7 @@ const RoleCard = ({
 const RoleSelectionScreen = () => {
     const router = useRouter();
     const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
+    const [selectedRole, setSelectedRole] = useState<UserRole | null>("DONOR");
 
     const roles = [
         {
@@ -105,13 +108,19 @@ const RoleSelectionScreen = () => {
         },
     ];
 
-    const handleContinue = () => {
+    const handleContinue = async () => {
         if (!selectedRole) return;
-        if (selectedRole === "RECIPIENT") {
-            router.replace("/food-recipient");
-            return;
+        try {
+            const stored = await getStoredUser();
+            await setStoredUser({
+                ...stored,
+                role: selectedRole,
+            });
+        } catch (e) {
+            console.warn("Could not save selected role:", e);
         }
-        router.replace("/main" as any);
+
+        router.replace('/(donor)');
     };
 
     return (

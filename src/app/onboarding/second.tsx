@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import img1 from '../../assets/f14.jpg';
+import img1 from '../../../assets/images/logo-glow.png';
 import {
   View,
   Text,
