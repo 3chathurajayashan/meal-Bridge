@@ -88,7 +88,7 @@ export default function OnboardingThird() {
         }).start(() => {
           // Wait briefly to let the user register "All Set!", then navigate
           setTimeout(() => {
-            router.push('/onboarding/RoleSelectionScreen');
+            router.push('/auth/signIn');
           }, 600);
         });
       }, 1200);
