@@ -1,0 +1,61 @@
+export const foods = [
+  {
+    id: 'f1',
+    foodName: 'Fresh Vegetable Box',
+    category: 'Vegetables',
+    description: 'A mixed box of seasonal vegetables. Washed and ready.',
+    quantity: 10,
+    unit: 'boxes',
+    image: '/images/veg-box.jpg',
+    donorName: 'Green Farms',
+    location: 'Community Center, Downtown',
+    distance: '1.2 km',
+    expiryDate: new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString(),
+    availableTime: '10:00 - 18:00',
+    status: 'Available',
+  },
+  {
+    id: 'f2',
+    foodName: 'Assorted Sandwiches',
+    category: 'Prepared Meals',
+    description: 'Assorted vegetarian sandwiches. Eat within 8 hours.',
+    quantity: 20,
+    unit: 'packs',
+    image: '/images/sandwich.jpg',
+    donorName: 'BakeHouse',
+    location: 'East Side Park',
+    distance: '2.7 km',
+    expiryDate: new Date(Date.now() + 1000 * 60 * 60 * 6).toISOString(),
+    availableTime: '12:00 - 15:00',
+    status: 'Available',
+  },
+  {
+    id: 'f3',
+    foodName: 'Milk (4L)',
+    category: 'Dairy',
+    description: 'Fresh pasteurized milk. Keep refrigerated.',
+    quantity: 4,
+    unit: 'litres',
+    image: '/images/milk.jpg',
+    donorName: 'Dairy Coop',
+    location: 'North Shelter',
+    distance: '4.1 km',
+    expiryDate: new Date(Date.now() + 1000 * 60 * 60 * 48).toISOString(),
+    availableTime: '09:00 - 17:00',
+    status: 'Reserved',
+  }
+];
+
+export const requests = [
+  {
+    id: 'r1',
+    foodId: 'f1',
+    foodName: 'Fresh Vegetable Box',
+    quantity: 1,
+    unit: 'box',
+    requestDate: new Date().toISOString(),
+    donor: 'Green Farms',
+    location: 'Community Center, Downtown',
+    status: 'Requested',
+  }
+];

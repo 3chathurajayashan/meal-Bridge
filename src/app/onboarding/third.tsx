@@ -23,7 +23,6 @@ export default function OnboardingThird() {
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   // Apple-like morphing button animations
-  const buttonWidthAnim = useRef(new Animated.Value(1)).current; // 1 = 100% width, or interpolated
   const contentFadeAnim = useRef(new Animated.Value(1)).current;
   const successScaleAnim = useRef(new Animated.Value(0)).current;
 
@@ -88,7 +87,7 @@ export default function OnboardingThird() {
         }).start(() => {
           // Wait briefly to let the user register "All Set!", then navigate
           setTimeout(() => {
-            router.push('/onboarding/RoleSelectionScreen');
+            router.push('/onboarding/RoleSelectionScreen' as any);
           }, 600);
         });
       }, 1200);

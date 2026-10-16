@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useRouter } from "expo-router";
 import {
     View,
     Text,
@@ -86,6 +87,7 @@ const RoleCard = ({
 
 const RoleSelectionScreen = () => {
     const router = useRouter();
+    const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
     const [selectedRole, setSelectedRole] = useState<UserRole | null>("DONOR");
 
     const roles = [
