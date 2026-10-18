@@ -1,3 +1,5 @@
+import React, { useState } from "react";
+import { useRouter } from "expo-router";
 import { router } from "expo-router";
 import { useState } from "react";
 import {
@@ -94,6 +96,7 @@ const RoleSelectionScreen = () => {
     const [selectedRole, setSelectedRole] =
         useState<UserRole | null>(null);
     const router = useRouter();
+    const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
     const [selectedRole, setSelectedRole] = useState<UserRole | null>("DONOR");
 
     const roles = [
